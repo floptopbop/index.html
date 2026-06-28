@@ -1,724 +1,1194 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASCII Ocean – Dynamic Simulation Framework</title>
-    <style>
-        html, body {
-            margin: 0; padding: 0;
-            background: #04060a;
-            overflow: hidden;
-            width: 100vw; height: 100vh;
-            /* Uniform font rendering profile across distinct browser engines */
-            font-family: Consolas, "Lucida Console", "Courier New", Monaco, monospace;
-            font-weight: bold;
-        }
-        canvas { 
-            display: block; 
-            width: 100%; 
-            height: 100%;
-            filter: brightness(2.0);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ODM_OS // V4</title>
+  <style>
+    :root {
+      --─
+function buildWorld() {
+  scene.add(new THREE.AmbientLight(0xC77B8C, 1.0));
+  const sun = new THREE.DirectionalLight(0xFE8D6D, 0.8);
+  sun.position.set(10, 200, 100);
+  scene.add(sun);
+
+  const grid = new THREE.GridHelper(1200, 1200, 0x252F1C, 0x252F1C);
+  grid.userData.collidable = false;
+  scene.add(grid);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(2800, 2200),
+    new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.GROUND, depthWrite: false })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.1;
+  ground.userData.collidable = true;
+  scene.add(ground);
+
+  const pMat    = new THREE.MeshLambertMaterial({ color: CONFIG.COLORS.PILLAR });
+  const pMatTop = new THREE.MeshLambertMaterial({ color: 0x4B474A });
+  const mats    = [pMat, pMat, pMatTop, pMat, pMat, pMat];
+
+  for (let i = 0; i < 1160; i++) {
+    const h    = 15 + Math.random() * 200;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(12, h, 12), mats);
+    let px = (Math.random() - 0.5) * 2400;
+    let pz = (Math.random() - 0.5) * 2400;
+    if (Math.abs(px) < 40 && Math.abs(pz) < 20) px += 140;
+    mesh.position.set(px, h / 2, pz);
+    mesh.userData.collidable = true;
+    mesh.userData.height = h;
+    scene.add(mesh);
+    pillars.push(mesh);
+  }
+}
+
+bg: #302D2A;
+      --text: #212529;
+      --accent: #662E21;
+      --glass: rgba(255,255,255,0.8);
+      --border: #ced4da;
+    }
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      user-select: none; -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    body, html {
+      width: 100vw; height: 100vh; overflow: hidden;
+      background: var(--bg); font-family: monospace; color: var(--text);
+    }
+
+    #canvas-container { position: absolute; inset: 0; z-index: 1; }
+
+    /* Slash trail overlay */
+    #slash-canvas {
+      position: absolute; inset: 0; z-index: 5;
+      pointer-events: none;
+    }
+
+    /* Inertia vignette — black on decel */
+    #inertia-vignette {
+      position: absolute; inset: 0; z-index: 6;
+      pointer-events: none; opacity: 0;
+    }
+
+    #crosshair {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 12px; height: 12px; z-index: 10; pointer-events: none;
+      border: 2px solid #aaa; border-radius: 50%; transition: all 0.1s;
+    }
+    #crosshair.locked {
+      border-color: var(--accent);
+      transform: translate(-50%,-50%) scale(1.5);
+      background: rgba(102,46,33,0.25);
+      box-shadow: 0 0 12px rgba(102,46,33,0.5);
+    }
+
+    #telemetry {
+      position: absolute; top: 10px; left: 10px; z-index: 10;
+      background: var(--glass); padding: 10px 14px;
+      border-left: 4px solid var(--accent);
+      font-size: 8px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 1px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      pointer-events: none; line-height: 1.9;
+    }
+
+    /* Kill counter */
+    #kill-counter {
+      position: absolute; top: 10px; right: 10px; z-index: 10;
+      background: var(--glass); padding: 10px 14px;
+      border-right: 4px solid var(--accent);
+      font-size: 11px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 2px;
+      pointer-events: none;
+    }
+
+    /* LEFT STICK */
+    #joyL {
+      position: absolute; bottom: 55px; left: 40px; z-index: 5;
+      width: 90px; height: 90px; border-radius: 50%;
+      border: 2px dashed var(--border); background: var(--glass);
+      pointer-events: none; opacity: 0.75;
+    }
+
+    /* RIGHT STICK */
+    #joyR {
+      position: absolute; bottom: 55px; right: 40px; z-index: 5;
+      width: 90px; height: 90px; border-radius: 50%;
+      border: 2px dashed var(--border); background: var(--glass);
+      pointer-events: none; opacity: 0.75;
+    }
+
+    .knob {
+      position: absolute; width: 40px; height: 40px; border-radius: 50%;
+      background: var(--text); top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      will-change: transform; pointer-events: none;
+      transition: background 0.1s;
+    }
+    #knobL.boost { background: var(--accent); box-shadow: 0 0 14px rgba(102,46,33,0.7); }
+    #knobR.active { background: var(--accent); box-shadow: 0 0 0 3px rgba(102,46,33,0.4); }
+
+    /* Slash zone indicator — very subtle, top 39% */
+    #slash-zone-hint {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 39vh; z-index: 4; pointer-events: none;
+      border-bottom: 1px dashed rgba(255,255,255,0.06);
+    }
+
+    #desktop-hint {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 10; font-size: 9px; font-weight: bold; color: rgba(255,255,255,0.2);
+      pointer-events: none; letter-spacing: 2px; white-space: nowrap;
+    }
+    @media (hover: none) and (pointer: coarse) { #desktop-hint { display: none; } }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <canvas id="simulationCanvas"></canvas>
-    <script>
-        // Restrict document gesture overrides to protect canvas matrix metrics
-        document.addEventListener('gesturestart', e => e.preventDefault());
-        document.addEventListener('gesturechange', e => e.preventDefault());
-        document.addEventListener('gestureend', e => e.preventDefault());
-        document.addEventListener('touchmove', e => {
-            if (e.target === canvas || canvas.contains(e.target)) e.preventDefault();
-        }, { passive: false });
 
-        const canvas = document.getElementById("simulationCanvas");
-        const ctx = canvas.getContext("2d", { alpha: false });
+<div id="canvas-container"></div>
+<canvas id="slash-canvas"></canvas>
+<div id="inertia-vignette"></div>
+<div id="crosshair"></div>
+<div id="slash-zone-hint"></div>
 
-        const CFG = {
-            fontSize: 6,
-            fontFamily: 'Consolas, "Lucida Console", "Courier New", Monaco, monospace',
-            shorelineRatio: 0.35,
-            pierXRatio: 0.84,
-            pierLengthRatio: 0.68,
-        };
+<div id="telemetry">
+  <div>ODM_OS // V4</div>
+  <div id="hud-spd">SPD: 0.0</div>
+  <div id="hud-alt">ALT: 0.0</div>
+  <div id="hud-accel">ACCEL: 0.0</div>
+  <div id="hud-boost">BOOST: 0%</div>
+  <div id="hud-status" style="color:var(--accent)">IDLE</div>
+</div>
 
-        // Re-engineered Luminous Palettes for maximum glyph contrast
-        const PALETTE = {
-            night: {
-                bg: "#030509", drySand: "#7c6453", wetSand: "#4a4c40", water: "#006699",
-                ripple: "#00b4d8", foam: "#caf0f8", pier: "#5c4033", buoy: "#ff3333",
-                flotsam: "#99cc33", dog: "#ff9933", rain: "#4cc9f0", lightning: "#ffffff"
-            },
-            dawn: {
-                bg: "#1a1226", drySand: "#bc987e", wetSand: "#6b7061", water: "#0077b6",
-                ripple: "#48cae4", foam: "#ade8f4", pier: "#70483c", buoy: "#ff5500",
-                flotsam: "#aacc00", dog: "#f77f00", rain: "#90e0ef", lightning: "#fff1e0"
-            },
-            day: {
-                bg: "#0d1b2a", drySand: "#e9c46a", wetSand: "#9a8c73", water: "#0096c7",
-                ripple: "#00b4d8", foam: "#ffffff", pier: "#8b5a2b", buoy: "#ff4d00",
-                flotsam: "#52b788", dog: "#f4a261", rain: "#caf0f8", lightning: "#ffffff"
-            },
-            dusk: {
-                bg: "#1b1424", drySand: "#c77d55", wetSand: "#5c635a", water: "#03045e",
-                ripple: "#0077b6", foam: "#e0f2f1", pier: "#543327", buoy: "#ff3a00",
-                flotsam: "#70e000", dog: "#e76f51", rain: "#00b4d8", lightning: "#ffe6cc"
-            }
-        };
+<div id="kill-counter">KILLS: <span id="kill-count">0</span></div>
 
-        let W, H, charW, charH, totalCells;
-        
-        // Flattened Allocation Buffers for unified CPU cache access
-        let current, previous, nextBuffer, foam, wetness, rainGrid;
-        let shoreContour;
-        const chars = "◯░∷▓∘oO";
+<div id="joyL"><div class="knob" id="knobL"></div></div>
+<div id="joyR"><div class="knob" id="knobR"></div></div>
 
-        let entities = [];
-        let rainParticles = [];
-        let lightningFlash = 0;
+<div id="desktop-hint">CLICK LOCK · WASD · LMB HOOK · SPACE BOOST · MOUSE SWIPE = SLASH</div>
 
-        const WEATHER_PRESETS = {
-            CALM:    { turb: 0.03, wind: 0.02, rain: 0.0 },
-            BREEZE:  { turb: 0.10, wind: 0.45, rain: 0.0 },
-            DRIZZLE: { turb: 0.18, wind: 0.30, rain: 0.30 },
-            STORM:   { turb: 0.65, wind: 1.80, rain: 0.80 },
-        };
+<script>
+/* ============================================================
+   ODM_OS // V4
+   Controls:
+     Left stick  — move + north cone (45° either side) = analog boost
+     Right stick — look + grapple (hold=active, release=drop)
+     Top 39% of screen — slash zone, swipe to attack
+   Dummies:
+     IDLE (zero cost) → RAGDOLL (physics+raycasting) → SETTLED → DEAD
+     Shared particle system: white=smoke, red=blood/death
+   Physics:
+     707 coefficient, paper-anchored gravity, exponential drag
+     Look momentum decays by GROUND_FRICTION (unified inertia constant)
+   FX:
+     FOV driven by acceleration magnitude, asymmetric lerp
+     Black vignette on deceleration, radial, lingers
+============================================================ */
 
-        const ENV = {
-            turb: 0.03, wind: 0.02, rain: 0.0,
-            dayPhase: 0.5,
-            currentColors: {},
-            targetWeather: WEATHER_PRESETS.CALM,
-            weatherTimer: 10000,
-            weatherLabel: "CALM",
-        };
+// ── CONFIG ────────────────────────────────────────────────
+const CONFIG = {
+  PHYSICS: {
+    GRAVITY:            -10.81,
+    AIR_DRAG:            0.2,
+    GROUND_FRICTION:    25.0,
+    MOVE_ACCEL_GROUND: 140.0,
+    MOVE_ACCEL_AIR:     12.0,
+    BOOST_ACCEL:        85.0,
+    HOOK_PULL:          75.0,
+    MAX_ROPE_DIST:     1500,
+    MAX_SPEED:         350.0,
+  },
+  BOOST: {
+    // North cone gate — cos(45°) = 0.707
+    CONE_THRESHOLD: 0.707,
+  },
+  BLADE: {
+    RADIUS:        9.0,       // slash hit radius
+    COOLDOWN:      0.45,
+    SWIPE_PX:      40,        // min pixel travel to register slash
+    SWIPE_FRAMES:  6,         // history window
+    FACING_DOT:    0.4,       // must be roughly facing dummy to slash it
+    IMPULSE_MULT:  1.4,       // player vel multiplier transferred to dummy
+  },
+  FOV: {
+    BASE:         65,
+    MAX_EXPAND:   50,
+    ACCEL_SCALE:   0.3,
+    EXPAND_RATE:   0.1,
+    RECOVER_RATE:  0.001,
+  },
+  VIGNETTE: {
+    DECEL_SCALE:  0.001,
+    MAX_OPACITY:  0.85,
+    DECAY_RATE:   0.0001,
+  },
+  LOOK: {
+    STICK_SENS:   0.06,
+    STICK_RADIUS: 65,
+  },
+  DUMMY: {
+    COUNT:           35,
+    GROUND_CHANCE:   0.4,     // 40% ground, 60% pillar top
+    RAGDOLL_DRAG:    1.8,
+    SETTLE_SPEED:    0.8,
+    DESPAWN_TIME:    4.0,
+    PROXIMITY_KILL:  3.5,     // passive proximity fallback
+    NEARBY_RADIUS:   35,      // pillar pre-filter for ragdoll raycasting
+  },
+  SMOKE: {
+    MAX_PARTICLES:   400,     // bumped for dual color
+    MIN_SPEED:         1,
+    BASE_RATE:        18,
+    MAX_RATE:         55,
+    BOOST_MULT:       33.2,
+    GRAPPLE_BURST:    60,
+    ACCEL_BURST:      20,
+    ACCEL_THRESHOLD:  22,
+    PARTICLE_SIZE:    13.2,
+    LIFETIME_MIN:      0.5,
+    LIFETIME_MAX:     21.6,
+    UPWARD_DRIFT:      1.5,
+    SPREAD:            3.0,
+    BLOOD_BURST:      40,     // particles per dummy kill
+    BLOOD_LIFETIME:    6.0,
+  },
+  COLORS: {
+    SKY:    0x4A7293,
+    GROUND: 0x29362C,
+    PILLAR: 0x40312C,
+    ROPE:   0x525B67,
+    DUMMY:  0x8B1A1A,
+  }
+};
 
-        // Calibrated Dog State Model
-        let dog = {
-            x: 10, y: 0,
-            vx: 0, vy: 0,
-            state: "WANDER", facing: "right",
-            target: null,
-            timer: 120, swimTicks: 0,
-            napTimer: 500,
-            speed: 0.10, // Normalized targeting acceleration rate
-            awakeOverride: false,
-        };
-        let napAnim = { bubbleActive: false, ticks: 0 };
+// ── ENGINE STATE ──────────────────────────────────────────
+let scene, camera, renderer, clock;
+let slashCanvas, slashCtx;
+let pillars = []; // stored for dummy placement + ragdoll raycasting
 
-        function parseHex(hex) {
-            let num = parseInt(hex.slice(1), 16);
-            return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+const player = {
+  pos:          new THREE.Vector3(0, 10, 40),
+  vel:          new THREE.Vector3(),
+  yaw:          0,
+  pitch:        0,
+  height:       2,
+  boosting:     false,
+  boostIntensity: 0,
+  prevSpeed:    0,
+  slashCooldown: 0,
+};
+
+const grapple = { active: false, anchor: new THREE.Vector3(), mesh: null };
+const input   = { w: false, a: false, s: false, d: false };
+
+const stickL = { active: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0 };
+const stickR = {
+  active: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0,
+  momentumDx: 0, momentumDy: 0,
+};
+
+// Slash touch tracking
+const slashTouches = {}; // id → history array
+
+let isPointerLocked = false;
+const raycaster  = new THREE.Raycaster();
+const centerNDC  = new THREE.Vector2(0, 0);
+let currentFov   = CONFIG.FOV.BASE;
+let vigOpacity   = 0;
+let killCount    = 0;
+
+// ── PARTICLE SYSTEM ───────────────────────────────────────
+// Unified pool — each particle has a color field (white smoke or red blood)
+const particles = [];
+let pGeo, pMat, pPoints;
+let pEmitAccum = 0;
+
+// ── DUMMY POOL ────────────────────────────────────────────
+const dummies = [];
+
+// ── INIT ──────────────────────────────────────────────────
+function init() {
+  const container = document.getElementById('canvas-container');
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(CONFIG.COLORS.SKY);
+  scene.fog = new THREE.Fog(CONFIG.COLORS.SKY, 1, 1000);
+
+  camera = new THREE.PerspectiveCamera(CONFIG.FOV.BASE, innerWidth / innerHeight, 0.1, 2000);
+  camera.rotation.order = 'YXZ';
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  slashCanvas        = document.getElementById('slash-canvas');
+  slashCanvas.width  = innerWidth;
+  slashCanvas.height = innerHeight;
+  slashCtx           = slashCanvas.getContext('2d');
+
+  clock = new THREE.Clock();
+  buildWorld();
+  initParticles();
+  spawnDummies();
+  bindInputs();
+  engineTick();
+}
+
+// ── WORLD ─────────────────────────────────────────────────
+function buildWorld() {
+  scene.add(new THREE.AmbientLight(0xC77B8C, 1.0));
+  const sun = new THREE.DirectionalLight(0xFE8D6D, 0.8);
+  sun.position.set(10, 200, 100);
+  scene.add(sun);
+
+  const grid = new THREE.GridHelper(1200, 1200, 0x252F1C, 0x252F1C);
+  grid.userData.collidable = false;
+  scene.add(grid);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(2800, 2200),
+    new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.GROUND, depthWrite: false })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.1;
+  ground.userData.collidable = true;
+  scene.add(ground);
+
+  const pMat    = new THREE.MeshLambertMaterial({ color: CONFIG.COLORS.PILLAR });
+  const pMatTop = new THREE.MeshLambertMaterial({ color: 0x4B474A });
+  const mats    = [pMat, pMat, pMatTop, pMat, pMat, pMat];
+
+  for (let i = 0; i < 1160; i++) {
+    const h    = 15 + Math.random() * 200;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(12, h, 12), mats);
+    let px = (Math.random() - 0.5) * 2400;
+    let pz = (Math.random() - 0.5) * 2400;
+    if (Math.abs(px) < 40 && Math.abs(pz) < 20) px += 140;
+    mesh.position.set(px, h / 2, pz);
+    mesh.userData.collidable = true;
+    mesh.userData.height = h;
+    scene.add(mesh);
+    pillars.push(mesh);
+  }
+}
+
+// ── PARTICLES ─────────────────────────────────────────────
+function createSmokeTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0,    'rgba(255,255,255,1)');
+  g.addColorStop(0.15, 'rgba(240,248,255,0.9)');
+  g.addColorStop(0.35, 'rgba(200,225,245,0.55)');
+  g.addColorStop(0.6,  'rgba(160,200,225,0.15)');
+  g.addColorStop(1,    'rgba(130,180,210,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.needsUpdate = true;
+  return t;
+}
+
+function initParticles() {
+  const max = CONFIG.SMOKE.MAX_PARTICLES;
+  pGeo = new THREE.BufferGeometry();
+
+  // positions + colors as vertex attributes
+  const positions = new Float32Array(max * 3);
+  const colors    = new Float32Array(max * 3); // r,g,b per particle
+  pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  pGeo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+  pGeo.setDrawRange(0, 0);
+
+  pMat = new THREE.PointsMaterial({
+    size:            CONFIG.SMOKE.PARTICLE_SIZE,
+    map:             createSmokeTexture(),
+    vertexColors:    true,               // use per-particle color
+    blending:        THREE.AdditiveBlending,
+    depthWrite:      false,
+    transparent:     true,
+    opacity:         0.65,
+    sizeAttenuation: true,
+  });
+
+  pPoints = new THREE.Points(pGeo, pMat);
+  pPoints.frustumCulled = false;
+  scene.add(pPoints);
+}
+
+function emitParticle(pos, vel, isBlood, lifeMult) {
+  const cfg  = CONFIG.SMOKE;
+  const life = isBlood
+    ? cfg.BLOOD_LIFETIME * (0.5 + Math.random() * 0.8)
+    : (cfg.LIFETIME_MIN + Math.random() * (cfg.LIFETIME_MAX - cfg.LIFETIME_MIN)) * (lifeMult || 1);
+  const spread = isBlood ? cfg.SPREAD * 1.5 : cfg.SPREAD;
+  particles.push({
+    pos:     pos.clone(),
+    vel:     new THREE.Vector3(
+      vel.x + (Math.random() - 0.5) * spread * 2,
+      vel.y + Math.random() * cfg.UPWARD_DRIFT + (Math.random() - 0.5) * spread,
+      vel.z + (Math.random() - 0.5) * spread * 2
+    ),
+    life,
+    maxLife: life,
+    blood:   isBlood,
+  });
+}
+
+function updateParticles(dt) {
+  const cfg        = CONFIG.SMOKE;
+  const speed      = player.vel.length();
+  const isBoosting = player.boostIntensity > 0.05;
+
+  // Age + move
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    p.pos.x += p.vel.x * dt;
+    p.pos.y += p.vel.y * dt;
+    p.pos.z += p.vel.z * dt;
+    p.vel.x *= Math.exp(-3.5 * dt);
+    p.vel.z *= Math.exp(-3.5 * dt);
+    p.vel.y *= Math.exp(-2.5 * dt);
+    p.vel.y += 1.2 * dt; // upward drift
+  }
+
+  // Movement smoke emission
+  let rate = 0;
+  if (speed > cfg.MIN_SPEED) {
+    const t = Math.min(1, (speed - cfg.MIN_SPEED) / (CONFIG.PHYSICS.MAX_SPEED - cfg.MIN_SPEED));
+    rate = cfg.BASE_RATE + t * (cfg.MAX_RATE - cfg.BASE_RATE);
+  }
+  if (isBoosting) rate *= cfg.BOOST_MULT;
+  if (grapple.active) rate += cfg.BASE_RATE * 0.7;
+
+  // Accel burst
+  const speedDelta = speed - player.prevSpeed;
+  if (speedDelta > cfg.ACCEL_THRESHOLD && speed > cfg.MIN_SPEED) {
+    const burst  = Math.floor(cfg.ACCEL_BURST * (speedDelta / cfg.ACCEL_THRESHOLD));
+    const behind = player.vel.clone().normalize().multiplyScalar(-1);
+    if (behind.length() < 0.1) behind.set(0, -1, 0);
+    for (let b = 0; b < Math.min(burst, 30) && particles.length < cfg.MAX_PARTICLES; b++) {
+      emitParticle(
+        player.pos.clone().addScaledVector(behind, 0.8 + Math.random() * 1.5),
+        behind.clone().multiplyScalar(4 + Math.random() * 8),
+        false, 1.3
+      );
+    }
+  }
+
+  // Continuous trail
+  if (rate > 0 && particles.length < cfg.MAX_PARTICLES) {
+    pEmitAccum += rate * dt;
+    const behind = player.vel.clone().normalize().multiplyScalar(-1);
+    if (behind.length() < 0.001) behind.set(0, -0.1, 0);
+    while (pEmitAccum >= 1.0 && particles.length < cfg.MAX_PARTICLES) {
+      pEmitAccum -= 1.0;
+      const ep = player.pos.clone()
+        .addScaledVector(behind, 1.0 + Math.random() * 2.5)
+        .add(new THREE.Vector3((Math.random()-0.5)*1.2, -0.5+Math.random()*0.8, (Math.random()-0.5)*1.2));
+      emitParticle(ep, behind.clone().multiplyScalar(3 + Math.random() * 6), false, 1.0);
+    }
+  }
+
+  // Anchor puff
+  if (grapple.active && particles.length < cfg.MAX_PARTICLES - 3 && Math.random() < 0.2) {
+    const ap = grapple.anchor.clone().add(
+      new THREE.Vector3((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5)
+    );
+    particles.push({
+      pos: ap,
+      vel: new THREE.Vector3((Math.random()-0.5)*1.5, 1.5+Math.random()*3, (Math.random()-0.5)*1.5),
+      life: 0.3 + Math.random() * 0.8, maxLife: 1.2, blood: false,
+    });
+  }
+
+  while (particles.length > cfg.MAX_PARTICLES) particles.shift();
+
+  // Write geometry
+  const posArr = pGeo.attributes.position.array;
+  const colArr = pGeo.attributes.color.array;
+  const count  = particles.length;
+
+  for (let i = 0; i < count; i++) {
+    const p  = particles[i];
+    const i3 = i * 3;
+    const life = p.life / p.maxLife; // fade out
+
+    posArr[i3]   = p.pos.x;
+    posArr[i3+1] = p.pos.y;
+    posArr[i3+2] = p.pos.z;
+
+    if (p.blood) {
+      // Red blood — fades dark as it ages
+      colArr[i3]   = 0.7 * life + 0.15;
+      colArr[i3+1] = 0.05 * life;
+      colArr[i3+2] = 0.05 * life;
+    } else {
+      // White/blue smoke
+      const brightness = 0.6 + 0.4 * life;
+      colArr[i3]   = brightness * 0.85;
+      colArr[i3+1] = brightness * 0.92;
+      colArr[i3+2] = brightness;
+    }
+  }
+
+  pGeo.attributes.position.needsUpdate = true;
+  pGeo.attributes.color.needsUpdate    = true;
+  pGeo.setDrawRange(0, count);
+}
+
+// Blood burst on dummy death
+function emitBloodBurst(pos, inheritVel) {
+  const count = CONFIG.SMOKE.BLOOD_BURST;
+  for (let i = 0; i < count && particles.length < CONFIG.SMOKE.MAX_PARTICLES; i++) {
+    const splat = inheritVel.clone()
+      .multiplyScalar(0.3 + Math.random() * 0.7)
+      .add(new THREE.Vector3(
+        (Math.random()-0.5) * 8,
+        Math.random() * 6,
+        (Math.random()-0.5) * 8
+      ));
+    emitParticle(pos.clone().add(new THREE.Vector3(
+      (Math.random()-0.5)*2, Math.random()*2, (Math.random()-0.5)*2
+    )), splat, true, 1.0);
+  }
+}
+
+// ── DUMMIES ───────────────────────────────────────────────
+function spawnDummies() {
+  const dummyGeo = new THREE.CylinderGeometry(0.6, 0.75, 2.2, 8);
+  const dummyMat = new THREE.MeshLambertMaterial({ color: CONFIG.COLORS.DUMMY });
+
+  for (let i = 0; i < CONFIG.DUMMY.COUNT; i++) {
+    const mesh = new THREE.Mesh(dummyGeo, dummyMat.clone());
+    const onGround = Math.random() < CONFIG.DUMMY.GROUND_CHANCE;
+
+    let px, py, pz;
+    if (onGround) {
+      px = (Math.random() - 0.5) * 2000;
+      pz = (Math.random() - 0.5) * 2000;
+      py = 1.1;
+    } else {
+      // Place on top of a random pillar
+      const pillar = pillars[Math.floor(Math.random() * pillars.length)];
+      px = pillar.position.x + (Math.random()-0.5) * 4;
+      pz = pillar.position.z + (Math.random()-0.5) * 4;
+      py = pillar.userData.height + 1.1;
+    }
+
+    mesh.position.set(px, py, pz);
+    scene.add(mesh);
+
+    dummies.push({
+      mesh,
+      pos:          new THREE.Vector3(px, py, pz),
+      vel:          new THREE.Vector3(),
+      state:        'IDLE',     // IDLE → RAGDOLL → SETTLED → DEAD
+      settleTimer:  0,
+      despawnTimer: 0,
+    });
+  }
+}
+
+function triggerRagdoll(dummy, impulse) {
+  if (dummy.state !== 'IDLE') return;
+  dummy.state = 'RAGDOLL';
+  dummy.vel.copy(impulse);
+  emitBloodBurst(dummy.pos, impulse);
+}
+
+function updateDummies(dt) {
+  const dcfg = CONFIG.DUMMY;
+
+  for (let i = dummies.length - 1; i >= 0; i--) {
+    const d = dummies[i];
+
+    if (d.state === 'IDLE') {
+      // Zero cost — just check proximity for passive kill
+      const dist = player.pos.distanceTo(d.pos);
+      if (dist < dcfg.PROXIMITY_KILL) {
+        // Passive contact — small impulse from player velocity
+        triggerRagdoll(d, player.vel.clone().multiplyScalar(0.5));
+        killCount++;
+        document.getElementById('kill-count').innerText = killCount;
+      }
+      continue;
+    }
+
+    if (d.state === 'RAGDOLL') {
+      // Physics
+      d.vel.y += CONFIG.PHYSICS.GRAVITY * dt;
+      const drag = Math.exp(-dcfg.RAGDOLL_DRAG * dt);
+      d.vel.x *= drag; d.vel.z *= drag;
+
+      d.pos.addScaledVector(d.vel, dt);
+      d.mesh.position.copy(d.pos);
+
+      // Tilt mesh in velocity direction for visual effect
+      if (d.vel.length() > 0.5) {
+        d.mesh.rotation.z = d.vel.x * 0.04;
+        d.mesh.rotation.x = -d.vel.z * 0.04;
+      }
+
+      // Ground check
+      if (d.pos.y <= 1.1) {
+        d.pos.y = 1.1;
+        d.vel.y = -d.vel.y * 0.18; // slight bounce
+        d.vel.x *= 0.6; d.vel.z *= 0.6;
+      }
+
+      // Nearby pillar raycasting — only active during ragdoll
+      if (d.vel.length() > 1.0) {
+        const nearby = pillars.filter(p => p.position.distanceTo(d.pos) < dcfg.NEARBY_RADIUS);
+        if (nearby.length > 0) {
+          raycaster.set(d.pos, d.vel.clone().normalize());
+          const hits = raycaster.intersectObjects(nearby, false);
+          if (hits.length && hits[0].distance < d.vel.length() * dt * 8) {
+            // Hit a pillar — bounce
+            d.vel.multiplyScalar(-0.3);
+            emitBloodBurst(d.pos, d.vel.clone().multiplyScalar(0.5));
+          }
         }
-
-        function toHexStr(r, g, b) {
-            return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
-        }
-
-        function lerpPalettes(p1, p2, f) {
-            const out = {};
-            for (let key in p1) {
-                const c1 = parseHex(p1[key]);
-                const c2 = parseHex(p2[key]);
-                const r = c1.r + (c2.r - c1.r) * f;
-                const g = c1.g + (c2.g - c1.g) * f;
-                const b = c1.b + (c2.b - c1.b) * f;
-                out[key] = toHexStr(r, g, b);
-            }
-            return out;
-        }
-
-        function getNapSprite(facing) {
-            napAnim.ticks++;
-            if (napAnim.ticks % 40 === 0) napAnim.bubbleActive = !napAnim.bubbleActive;
-            let wobble = (napAnim.ticks % 80 < 40) ? 0 : 1;
-            const zLine = napAnim.bubbleActive
-                ? (wobble === 0 ? " z ◯" : "  z ∗")
-                : (wobble === 0 ? " z z" : "  z z");
-            return facing === "left" ? [zLine, "/▾▽=='"] : [zLine, "'==▽▾⧵"];
-        }
-
-        function getDogSprite(state, facing) {
-            switch(state) {
-                case "NAP":   return getNapSprite(facing);
-                case "SWIM":  return ["", facing === "right" ? "∽/(_)\\" : "/(_)\\∽"];
-                case "ALERT": return facing === "right" ? ["'==▽▾⧵ !", "' '"] : ["! /▾▽=='", "  ' '"];
-                default:      return facing === "right" ? ["'==▽▾⧵", "' '"] : ["/▾▽=='", "' '"];
-            }
-        }
-
-        function resize() {
-            const tester = document.createElement("span");
-            tester.style.fontFamily = CFG.fontFamily;
-            tester.style.fontSize = `${CFG.fontSize}px`;
-            tester.style.lineHeight = "1em";
-            tester.style.position = "absolute";
-            tester.style.visibility = "hidden";
-            tester.textContent = "█";
-            document.body.appendChild(tester);
-            const rect = tester.getBoundingClientRect();
-            charW = rect.width;
-            charH = rect.height;
-            document.body.removeChild(tester);
-
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            W = Math.ceil(canvas.width / charW);
-            H = Math.ceil(canvas.height / charH);
-            totalCells = W * H;
-
-            current = new Float32Array(totalCells);
-            previous = new Float32Array(totalCells);
-            nextBuffer = new Float32Array(totalCells);
-            foam = new Float32Array(totalCells);
-            wetness = new Float32Array(totalCells);
-            rainGrid = new Uint8Array(totalCells);
-            shoreContour = new Int32Array(W);
-
-            const baseShore = Math.floor(H * CFG.shorelineRatio);
-            const s1 = Math.random() * 100, s2 = Math.random() * 100;
-
-            for (let x = 0; x < W; x++) {
-                shoreContour[x] = baseShore + Math.floor(Math.sin(x * 0.07 + s1) * 3.5 + Math.cos(x * 0.20 + s2) * 1.5);
-            }
-
-            entities = [
-                { x: Math.floor(W * 0.48), y: baseShore + 6, vx: 0, vy: 0, char: "◬", id: "buoy", carried: false }
-            ];
-            const items = ["~", "•", "♦", "⁕"];
-            for (let i = 0; i < 14; i++) {
-                entities.push({
-                    id: `flotsam_${i}`,
-                    x: Math.random() * (W - 8) + 4,
-                    y: Math.random() * (H - baseShore - 10) + baseShore + 8,
-                    vx: 0, vy: 0,
-                    char: items[Math.floor(Math.random() * items.length)],
-                    carried: false
-                });
-            }
-
-            dog.x = Math.floor(W * 0.3);
-            dog.y = shoreContour[Math.floor(dog.x)] - 4;
-            dog.state = "WANDER";
-            dog.timer = 100;
-            dog.napTimer = 600;
-            dog.target = null;
-            dog.awakeOverride = false;
-            rainParticles = [];
-
-            ctx.font = `bold ${CFG.fontSize}px ${CFG.fontFamily}`;
-            ctx.textBaseline = "top";
-        }
-
-        // Processing cycles locked entirely to static frame deltas
-        function updateWeatherAndTime(dt) {
-            ENV.dayPhase = (ENV.dayPhase + 0.00003 * dt) % 1.0;
-
-            ENV.weatherTimer -= dt;
-            if (ENV.weatherTimer <= 0) {
-                const keys = Object.keys(WEATHER_PRESETS);
-                const key = keys[Math.floor(Math.random() * keys.length)];
-                ENV.targetWeather = WEATHER_PRESETS[key];
-                ENV.weatherLabel = key;
-                ENV.weatherTimer = 20000 + Math.random() * 15000;
-            }
-
-            const lerpFactor = 1 - Math.exp(-0.0002 * dt);
-            ENV.turb += (ENV.targetWeather.turb - ENV.turb) * lerpFactor;
-            ENV.wind += (ENV.targetWeather.wind - ENV.wind) * lerpFactor;
-            ENV.rain += (ENV.targetWeather.rain - ENV.rain) * lerpFactor;
-
-            const p = ENV.dayPhase * 4;
-            const idx = Math.floor(p);
-            const frac = p - idx;
-            const cycles = ["night", "dawn", "day", "dusk"];
-            ENV.currentColors = lerpPalettes(PALETTE[cycles[idx]], PALETTE[cycles[(idx + 1) % 4]], frac);
-        }
-
-        function updateRain() {
-            rainGrid.fill(0);
-
-            if (lightningFlash > 0) lightningFlash--;
-            else if (ENV.turb > 0.50 && Math.random() < ENV.turb * 0.01) {
-                lightningFlash = Math.floor(Math.random() * 3) + 2;
-            }
-
-            if (ENV.rain > 0.05 && Math.random() < ENV.rain * 0.8) {
-                const count = Math.ceil(W * 0.03 * ENV.turb) || 1;
-                for (let k = 0; k < count; k++) {
-                    rainParticles.push({
-                        x: Math.random() * (W + 50) - 25,
-                        y: -2,
-                        targetY: Math.floor(Math.random() * (H - 2)),
-                        speed: (1.2 + ENV.turb * 1.8) * (0.8 + Math.random() * 0.3)
-                    });
-                }
-            }
-
-            if (ENV.turb > 0.1) {
-                for (let x = 1; x < W - 1; x++) {
-                    const sY = shoreContour[x];
-                    if (Math.random() < (ENV.turb * 0.08)) {
-                        const tY = sY + Math.floor(Math.random() * (H - sY - 1));
-                        if (tY > sY && tY < H - 1) {
-                            current[tY * W + x] += (Math.random() - 0.5) * ENV.turb * 0.12;
-                        }
-                    }
-                }
-            }
-
-            for (let i = rainParticles.length - 1; i >= 0; i--) {
-                let p = rainParticles[i];
-                p.x += ENV.wind * 0.6;
-                p.y += p.speed;
-                const ix = Math.floor(p.x);
-                const iy = Math.floor(p.y);
-                if (ix < 0 || ix >= W || iy >= H) { rainParticles.splice(i, 1); continue; }
-
-                if (iy >= p.targetY) {
-                    const idx = iy * W + ix;
-                    if (iy >= shoreContour[ix]) {
-                        if (iy < H - 1 && ix > 0 && ix < W - 1) {
-                            current[idx] += p.speed * 0.3;
-                            if (ENV.turb > 0.4 && Math.random() < 0.2) foam[idx] += p.speed * 0.2;
-                        }
-                    } else {
-                        wetness[idx] = 100;
-                    }
-                    rainParticles.splice(i, 1);
-                } else if (iy >= 0) {
-                    rainGrid[iy * W + ix] = 1;
-                }
-            }
-        }
-
-        function ripple() {
-            const pierX = Math.floor(W * CFG.pierXRatio);
-            const pierLen = Math.floor(H * CFG.pierLengthRatio);
-            const damping = 0.982 - ENV.turb * 0.015;
-
-            for (let y = 1; y < H - 1; y++) {
-                const yw = y * W;
-                const yAbove = (y - 1) * W;
-                const yBelow = (y + 1) * W;
-
-                for (let x = 1; x < W - 1; x++) {
-                    const idx = yw + x;
-                    const shoreY = shoreContour[x];
-                    const isSand = y < shoreY;
-
-                    if (x === pierX && y < pierLen && y % 3 === 0) {
-                        nextBuffer[idx] = 0;
-                        if (Math.abs(current[idx - 1]) > 4 || Math.abs(current[idx + 1]) > 4) {
-                            foam[idx] = Math.min(6, foam[idx] + 2);
-                        }
-                        continue;
-                    }
-
-                    let div = 2.001;
-                    let localDamp = damping;
-                    if (isSand) {
-                        const d = shoreY - y;
-                        div = 2.0006 + d * 0.003;
-                        localDamp = Math.max(0.60, 0.70 - d * 0.08);
-                    }
-
-                    let total = current[yAbove + x] + current[yBelow + x] + current[idx - 1] + current[idx + 1];
-                    let val = (total / div - previous[idx]) * localDamp;
-                    
-                    const delta = Math.abs(val - current[idx]);
-                    if (delta > 0.35) foam[idx] += delta * 0.3;
-
-                    if (isSand) {
-                        if (val > 0.08) foam[idx] += 0.18;
-                        if (val > 0.02 || foam[idx] > 0.04) wetness[idx] = 100;
-                        wetness[idx] *= 0.92;
-                    }
-
-                    foam[idx] *= isSand ? 0.75 : 0.89;
-                    if (foam[idx] < 0.01) foam[idx] = 0;
-
-                    nextBuffer[idx] = Math.max(-35, Math.min(35, val));
-                }
-            }
-            
-            let temp = previous; previous = current; current = nextBuffer; nextBuffer = temp;
-        }
-
-        function scanForFlotsam() {
-            if (dog.state === "NAP" || dog.state === "ALERT" || dog.state === "SWIM" || dog.state === "RETURN") return;
-            if (Math.random() > 0.03) return;
-
-            for (let e of entities) {
-                if (e.id === "buoy" || e.carried) continue;
-                if (e.y > shoreContour[Math.floor(e.x)] + 5 && e.y < H - 4) {
-                    if (Math.abs(e.x - dog.x) < W * 0.45) {
-                        dog.target = e;
-                        dog.state = "ALERT";
-                        dog.timer = 100;
-                        break;
-                    }
-                }
-            }
-        }
-
-        function updateDogAI() {
-            const currentShoreY = shoreContour[Math.floor(dog.x)];
-
-            if (dog.napTimer > 0) dog.napTimer--;
-
-            if (dog.awakeOverride) {
-                dog.awakeOverride = false;
-                dog.state = "WANDER";
-                dog.timer = 120;
-                dog.napTimer = 500;
-                dog.vy = -0.5;
-            }
-
-            switch(dog.state) {
-                case "NAP":
-                    dog.vx *= 0.12; dog.vy *= 0.12;
-                    const targetSleepY = currentShoreY - 4;
-                    dog.y += (targetSleepY - dog.y) * 0.2;
-                    if (Math.abs(dog.y - targetSleepY) < 0.1) dog.y = targetSleepY;
-
-                    if (dog.napTimer <= 0) {
-                        dog.state = "SIT";
-                        dog.timer = 90;
-                    }
-                    break;
-
-                case "SIT":
-                    dog.vx *= 0.15; dog.vy *= 0.15;
-                    dog.y += ((currentShoreY - 3) - dog.y) * 0.12;
-                    dog.timer--;
-                    if (dog.timer <= 0) {
-                        if (Math.random() < 0.25 && dog.napTimer <= 0) {
-                            dog.state = "NAP";
-                            dog.napTimer = 400;
-                        } else {
-                            dog.state = "WANDER";
-                            dog.timer = 80 + Math.floor(Math.random() * 120);
-                            dog.vx = (Math.random() - 0.5) * 0.20; // Drastically lowered walking acceleration steps
-                        }
-                    }
-                    scanForFlotsam();
-                    break;
-
-                case "WANDER":
-                    dog.x += dog.vx;
-                    dog.facing = dog.vx >= 0 ? "right" : "left";
-                    let targetWanderY = currentShoreY - 3.5 + Math.sin(dog.x * 0.3) * 1.0;
-                    dog.y += (targetWanderY - dog.y) * 0.12;
-                    
-                    if (dog.x < 4 || dog.x > W - 10) dog.vx *= -1;
-                    
-                    dog.timer--;
-                    if (dog.timer <= 0) {
-                        dog.state = "SIT";
-                        dog.timer = 50 + Math.floor(Math.random() * 50);
-                    }
-                    scanForFlotsam();
-                    break;
-
-                case "ALERT":
-                    if (!dog.target || dog.target.carried || dog.target.y <= shoreContour[Math.floor(dog.target.x)]) {
-                        dog.state = "SIT"; dog.timer = 40; dog.target = null; break;
-                    }
-                    let dxA = dog.target.x - dog.x;
-                    dog.facing = dxA >= 0 ? "right" : "left";
-                    if (Math.abs(dxA) > 1.2) dog.x += Math.sign(dxA) * dog.speed * 1.1;
-                    dog.y += ((currentShoreY - 1.5) - dog.y) * 0.2;
-
-                    if (dog.timer % 25 === 0 && dog.timer > 0) {
-                        let bx = Math.floor(dog.x + (dog.facing === "right" ? 5 : -1));
-                        let by = Math.floor(currentShoreY + 1);
-                        if (by < H && bx > 0 && bx < W) {
-                            current[by * W + bx] = 5.0; 
-                            foam[by * W + bx] = 3.0;
-                        }
-                    }
-                    dog.timer--;
-                    if (dog.timer <= 0) { 
-                        dog.state = "SWIM"; 
-                        dog.swimTicks = 0; 
-                    }
-                    break;
-
-                case "SWIM":
-                    dog.swimTicks++;
-                    if (!dog.target || dog.target.carried || dog.swimTicks > 500) { 
-                        dog.state = "RETURN"; 
-                        break; 
-                    }
-                    let dxS = dog.target.x - dog.x;
-                    let dyS = dog.target.y - dog.y;
-                    let distS = Math.sqrt(dxS * dxS + dyS * dyS);
-                    dog.facing = dxS >= 0 ? "right" : "left";
-
-                    if (distS < 1.5) { 
-                        dog.state = "RETURN"; 
-                        dog.target.carried = true; 
-                    } else {
-                        // Clamped swimming vectors to make dog fighting currents realistic
-                        dog.vx += (dxS / distS) * dog.speed * 0.12;
-                        dog.vy += (dyS / distS) * dog.speed * 0.12;
-                    }
-                    applyWaterPhysics(dog);
-                    break;
-
-                case "RETURN":
-                    let homeX = dog.target ? dog.target.x : W * 0.3;
-                    let dxR = homeX - dog.x;
-                    dog.facing = dxR >= 0 ? "right" : "left";
-
-                    if (dog.y <= shoreContour[Math.floor(dog.x)] - 2.5) {
-                        if (dog.target && dog.target.carried) {
-                            dog.target.carried = false;
-                            dog.target.y = shoreContour[Math.floor(dog.target.x)] - 1;
-                            dog.target.vx = 0; dog.target.vy = 0;
-                        }
-                        dog.target = null;
-                        dog.state = "SIT";
-                        dog.timer = 100;
-                        dog.napTimer = 250;
-                    } else {
-                        dog.vy -= dog.speed * 0.15;
-                        dog.vx += (homeX - dog.x) * 0.015;
-                    }
-                    applyWaterPhysics(dog);
-
-                    if (dog.target && dog.target.carried) {
-                        dog.target.x = dog.x + (dog.facing === "left" ? -1 : 4);
-                        dog.target.y = dog.y + 0.4;
-                    }
-                    break;
-            }
-
-            dog.x = Math.max(2, Math.min(W - 9, dog.x));
-            dog.y = Math.max(1, Math.min(H - 3, dog.y));
-
-            if (dog.y > currentShoreY) {
-                let ix = Math.floor(dog.x + 2), iy = Math.floor(dog.y + 1);
-                if (iy < H && ix < W) foam[iy * W + ix] = Math.min(5, foam[iy * W + ix] + 0.3);
-            }
-        }
-
-        function applyWaterPhysics(obj) {
-            let ix = Math.max(1, Math.min(W - 2, Math.floor(obj.x)));
-            let iy = Math.max(1, Math.min(H - 2, Math.floor(obj.y)));
-            
-            const idx = iy * W + ix;
-            const slopeX = current[idx + 1] - current[idx - 1];
-            const slopeY = current[idx + W] - current[idx - W];
-
-            obj.vx -= slopeX * 0.20; 
-            obj.vy -= slopeY * 0.20;
-            obj.vy += 0.003; 
-            
-            // Raised linear friction constraints to prevent drifting out of control
-            obj.vx *= 0.78; obj.vy *= 0.78;
-            obj.x += obj.vx; obj.y += obj.vy;
-        }
-
-        function updateEntities() {
-            for (let e of entities) {
-                if (e.carried) continue;
-                applyWaterPhysics(e);
-
-                if (e.x <= 2) { e.x = 3; e.vx *= -0.3; }
-                if (e.x >= W - 3) { e.x = W - 4; e.vx *= -0.3; }
-                if (e.y >= H - 2) { e.y = H - 3; e.vy *= -0.3; }
-
-                const sY = shoreContour[Math.floor(e.x)] || Math.floor(H * CFG.shorelineRatio);
-                if (e.y <= sY) {
-                    e.y = sY; e.vy *= -0.1; e.vx *= 0.3;
-                }
-                
-                let ix = Math.max(1, Math.min(W - 2, Math.floor(e.x)));
-                let iy = Math.max(1, Math.min(H - 2, Math.floor(e.y)));
-                if (Math.abs(e.vx) + Math.abs(e.vy) > 0.08 && iy > sY) {
-                    foam[iy * W + ix] += 0.25;
-                }
-            }
-        }
-
-        function drawHUD() {
-            const c = ENV.currentColors;
-            const flash = lightningFlash > 0;
-            ctx.fillStyle = "rgba(2, 3, 5, 0.9)";
-            ctx.fillRect(0, 0, charW * 44, charH * 2.2);
-
-            let arrow = "→";
-            if (ENV.wind < -0.2) arrow = "←";
-            if (Math.abs(ENV.wind) < 0.1) arrow = "·";
-
-            const txt = ` CONSOLE: ${ENV.weatherLabel} | Wind ${arrow} ${Math.abs(ENV.wind).toFixed(1)} | Diurnal ${(ENV.dayPhase * 100).toFixed(0)}%`;
-            ctx.fillStyle = flash ? c.lightning : c.foam;
-            ctx.fillText(txt, charW * 0.5, charH * 0.4);
-        }
-
-        function render() {
-            const c = ENV.currentColors;
-            const flash = lightningFlash > 0;
-            ctx.fillStyle = flash ? c.lightning : c.bg;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const pierX = Math.floor(W * CFG.pierXRatio);
-            const pierLen = Math.floor(H * CFG.pierLengthRatio);
-            
-            let rainChar = "│";
-            if (ENV.wind < -0.4) rainChar = "╱";
-            if (ENV.wind > 0.4) rainChar = "╲";
-
-            for (let y = 0; y < H; y++) {
-                const yw = y * W;
-                let runStr = "", runCol = "", runStartX = 0;
-
-                for (let x = 0; x < W; x++) {
-                    const idx = yw + x;
-                    const shoreY = shoreContour[x];
-                    const isSand = y < shoreY;
-                    let char = "∷", col = c.water;
-
-                    if (x === pierX && y < pierLen && y % 3 === 0) {
-                        char = "⊗"; col = c.pier;
-                    } else {
-                        const v = current[idx];
-                        const f = foam[idx];
-                        const w = wetness[idx];
-                        
-                        const norm = Math.max(-1, Math.min(1, v / 2.2));
-                        let charIdx = Math.floor(Math.pow(Math.abs(norm), 0.6) * (chars.length - 1));
-                        charIdx = Math.max(0, Math.min(charIdx, chars.length - 1));
-                        char = chars[charIdx];
-
-                        if (isSand) {
-                            if (f > 0.9 || v > 0.4) { col = c.foam; char = "◌"; }
-                            else if (v > 0.05 || f > 0.22) { col = c.foam; char = "·"; }
-                            else if (w > 0.05) { col = c.wetSand; char = "▓"; }
-                            else { col = c.drySand; char = "░"; }
-                        } else {
-                            if (f > 1.6) { col = c.foam; char = "░"; }
-                            else if (f > 0.7) { col = c.foam; char = "*"; }
-                            else if (f > 0.22) { col = c.ripple; char = "°"; }
-                            else if (v > 0.12 || v < -0.12) { col = c.ripple; }
-                            else { col = c.water; if (charIdx === 2) char = "∙"; }
-                        }
-                    }
-
-                    if (rainGrid[idx] === 1) { char = rainChar; col = c.rain; }
-
-                    if (x === 0) {
-                        runCol = col; runStr = char; runStartX = 0;
-                    } else if (col === runCol) {
-                        runStr += char;
-                    } else {
-                        ctx.fillStyle = flash ? c.lightning : runCol;
-                        ctx.fillText(runStr, runStartX * charW, y * charH);
-                        runCol = col; runStr = char; runStartX = x;
-                    }
-                }
-                if (runStr.length > 0) {
-                    ctx.fillStyle = flash ? c.lightning : runCol;
-                    ctx.fillText(runStr, runStartX * charW, y * charH);
-                }
-            }
-
-            for (let e of entities) {
-                ctx.fillStyle = flash ? c.lightning : (e.id === "buoy" ? c.buoy : c.flotsam);
-                ctx.fillText(e.char, Math.floor(e.x) * charW, Math.floor(e.y) * charH);
-            }
-
-            const dogSprite = getDogSprite(dog.state, dog.facing);
-            ctx.fillStyle = c.dog;
-            for (let r = 0; r < dogSprite.length; r++) {
-                ctx.fillText(dogSprite[r], Math.floor(dog.x) * charW, Math.floor(dog.y + r) * charH);
-            }
-
-            drawHUD();
-        }
-
-        function interact(cx, cy) {
-            const rad = 2;
-            for (let y = -rad; y <= rad; y++) {
-                const py = cy + y;
-                if (py <= 0 || py >= H - 1) continue;
-                for (let x = -rad; x <= rad; x++) {
-                    const px = cx + x;
-                    if (px > 0 && px < W - 1) {
-                        current[py * W + px] = 3.5;
-                        foam[py * W + px] = 2.0;
-                    }
-                }
-            }
-
-            const dX = dog.x + 2 - cx;
-            const dY = dog.y - cy;
-            if (Math.sqrt(dX * dX + dY * dY) < 5.0) {
-                if (dog.state === "NAP") dog.awakeOverride = true;
-            }
-
-            for (let e of entities) {
-                const dx = e.x - cx;
-                const dy = e.y - cy;
-                const d = Math.sqrt(dx * dx + dy * dy);
-                if (d < 6) {
-                    e.vx += (dx / d) * 10.0;
-                    e.vy += (dy / d) * 10.0;
-                }
-            }
-        }
-
-        function getGridCoords(e) {
-            const cX = e.clientX || (e.touches && e.touches[0].clientX);
-            const cY = e.clientY || (e.touches && e.touches[0].clientY);
-            return { x: Math.floor(cX / charW), y: Math.floor(cY / charH) };
-        }
-
-        canvas.addEventListener('pointerdown', e => {
-            const { x, y } = getGridCoords(e);
-            interact(x, y);
-        });
-        canvas.addEventListener('pointermove', e => {
-            if (e.buttons) {
-                const { x, y } = getGridCoords(e);
-                interact(x, y);
-            }
-        });
-        window.addEventListener('resize', resize);
-
-        // Deterministic Fixed Timestep Accumulator Loop
-        let lastTime = 0;
-        let accumulator = 0;
-        const TIME_STEP = 16.666; // Fixed 60Hz physics clock boundary
-
-        function animate(timestamp) {
-            if (!lastTime) lastTime = timestamp;
-            let dt = timestamp - lastTime;
-            lastTime = timestamp;
-            
-            if (dt > 100) dt = 100; // Shield against structural context switches or tab switching spikes
-            accumulator += dt;
-
-            while (accumulator >= TIME_STEP) {
-                updateWeatherAndTime(TIME_STEP);
-                updateRain();
-                ripple();
-                updateDogAI();
-                updateEntities();
-                accumulator -= TIME_STEP;
-            }
-
-            render();
-            requestAnimationFrame(animate);
-        }
-
-        resize();
-        requestAnimationFrame(animate);
-    </script>
+      }
+
+      // Continuous blood trickle while ragdolling
+      if (Math.random() < 0.3 && particles.length < CONFIG.SMOKE.MAX_PARTICLES) {
+        emitParticle(
+          d.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.5, Math.random()*0.5, (Math.random()-0.5)*0.5)),
+          new THREE.Vector3((Math.random()-0.5)*1.5, 0.5+Math.random()*2, (Math.random()-0.5)*1.5),
+          true, 0.6
+        );
+      }
+
+      // Settle check
+      if (d.vel.length() < dcfg.SETTLE_SPEED) {
+        d.state       = 'SETTLED';
+        d.settleTimer = 0;
+      }
+      continue;
+    }
+
+    if (d.state === 'SETTLED') {
+      d.settleTimer += dt;
+      // Light blood trickle while settled
+      if (Math.random() < 0.08 && particles.length < CONFIG.SMOKE.MAX_PARTICLES) {
+        emitParticle(
+          d.pos.clone(),
+          new THREE.Vector3((Math.random()-0.5)*0.8, 0.3+Math.random()*0.8, (Math.random()-0.5)*0.8),
+          true, 0.4
+        );
+      }
+      if (d.settleTimer > dcfg.DESPAWN_TIME) {
+        d.state = 'DEAD';
+      }
+      continue;
+    }
+
+    if (d.state === 'DEAD') {
+      // Final burst then remove
+      emitBloodBurst(d.pos, new THREE.Vector3(0, 2, 0));
+      scene.remove(d.mesh);
+      d.mesh.geometry.dispose();
+      dummies.splice(i, 1);
+    }
+  }
+}
+
+// ── SLASH SYSTEM ──────────────────────────────────────────
+let slashHistory = []; // screen points for trail rendering
+
+function drawSlashTrail() {
+  slashCtx.clearRect(0, 0, slashCanvas.width, slashCanvas.height);
+  for (const p of slashHistory) p.age++;
+  slashHistory = slashHistory.filter(p => p.age < 10);
+  if (slashHistory.length < 2) return;
+
+  slashCtx.shadowBlur  = 6;
+  slashCtx.shadowColor = 'rgba(200,40,40,0.8)';
+  for (let i = 1; i < slashHistory.length; i++) {
+    const p1   = slashHistory[i-1];
+    const p2   = slashHistory[i];
+    const life = (10 - p2.age) / 10;
+    slashCtx.beginPath();
+    slashCtx.moveTo(p1.x, p1.y);
+    slashCtx.lineTo(p2.x, p2.y);
+    slashCtx.strokeStyle = `rgba(220,50,50,${life * 0.9})`;
+    slashCtx.lineWidth   = life * 5;
+    slashCtx.lineCap     = 'round';
+    slashCtx.stroke();
+  }
+  slashCtx.shadowBlur = 0;
+}
+
+function detectAndPerformSlash(history) {
+  if (player.slashCooldown > 0) return;
+  const recent = history.filter(p => p.age < CONFIG.BLADE.SWIPE_FRAMES);
+  if (recent.length < 3) return;
+
+  const first = recent[0];
+  const last  = recent[recent.length - 1];
+  const dx    = last.x - first.x;
+  const dy    = last.y - first.y;
+  const dist  = Math.sqrt(dx*dx + dy*dy);
+  if (dist < CONFIG.BLADE.SWIPE_PX) return;
+
+  // Valid slash — check for dummies in range + facing cone
+  player.slashCooldown = CONFIG.BLADE.COOLDOWN;
+
+  const fwd = new THREE.Vector3();
+  camera.getWorldDirection(fwd);
+
+  let slashHit = false;
+  for (const d of dummies) {
+    if (d.state !== 'IDLE') continue;
+    const toDummy = new THREE.Vector3().subVectors(d.pos, player.pos);
+    const distToDummy = toDummy.length();
+    if (distToDummy > CONFIG.BLADE.RADIUS) continue;
+
+    toDummy.normalize();
+    const dot = fwd.dot(toDummy);
+    if (dot < CONFIG.BLADE.FACING_DOT) continue;
+
+    // Hit — transfer player momentum to dummy
+    const impulse = player.vel.clone().multiplyScalar(CONFIG.BLADE.IMPULSE_MULT);
+    impulse.y += 4; // slight upward kick
+    triggerRagdoll(d, impulse);
+    killCount++;
+    document.getElementById('kill-count').innerText = killCount;
+    slashHit = true;
+  }
+
+  // Camera shake on slash regardless of hit
+  triggerShake(slashHit ? 0.18 : 0.06, slashHit ? 2.5 : 0.8);
+}
+
+// ── CAMERA SHAKE ─────────────────────────────────────────
+let shakeDur = 0, shakeInten = 0;
+function triggerShake(dur, inten) { shakeDur = dur; shakeInten = inten; }
+
+// ── FOV + VIGNETTE ────────────────────────────────────────
+function updateInertiaFX(dt, accel) {
+  const fovCfg = CONFIG.FOV;
+  const vigCfg = CONFIG.VIGNETTE;
+
+  const accelMag = Math.abs(accel);
+  const isDecel  = accel < -2.0;
+
+  const targetFov = fovCfg.BASE + Math.min(fovCfg.MAX_EXPAND, accelMag * fovCfg.ACCEL_SCALE);
+  const lerpRate  = currentFov < targetFov ? fovCfg.EXPAND_RATE : fovCfg.RECOVER_RATE;
+  currentFov     += (targetFov - currentFov) * lerpRate;
+  camera.fov      = currentFov;
+  camera.updateProjectionMatrix();
+
+  const vig = document.getElementById('inertia-vignette');
+  if (isDecel) {
+    const tgt = Math.min(vigCfg.MAX_OPACITY, accelMag * vigCfg.DECEL_SCALE);
+    vigOpacity += (tgt - vigOpacity) * 0.25;
+  } else {
+    vigOpacity += (0 - vigOpacity) * vigCfg.DECAY_RATE;
+  }
+  if (vigOpacity < 0.002) vigOpacity = 0;
+
+  vig.style.background = `radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,${vigOpacity.toFixed(3)}) 100%)`;
+  vig.style.opacity = 1;
+}
+
+// ── PHYSICS ───────────────────────────────────────────────
+function updatePhysics(dt) {
+  if (dt <= 0) return;
+
+  camera.rotation.y = player.yaw;
+  camera.rotation.x = player.pitch;
+
+  player.vel.y += CONFIG.PHYSICS.GRAVITY * dt;
+
+  // Movement from left stick + WASD
+  let mx = (input.d ? 1 : 0) - (input.a ? 1 : 0);
+  let mz = (input.s ? 1 : 0) - (input.w ? 1 : 0);
+  if (stickL.active) { mx += stickL.dx; mz += stickL.dy; }
+
+  const moveVec = new THREE.Vector3(mx, 0, mz);
+  if (moveVec.lengthSq() > 1) moveVec.normalize();
+  moveVec.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yaw);
+
+  const onGround  = player.pos.y <= player.height + 0.05;
+  const moveAccel = onGround ? CONFIG.PHYSICS.MOVE_ACCEL_GROUND : CONFIG.PHYSICS.MOVE_ACCEL_AIR;
+  player.vel.x += moveVec.x * moveAccel * dt;
+  player.vel.z += moveVec.z * moveAccel * dt;
+
+  // ── NORTH CONE BOOST ─────────────────────────────────
+  // cos(45°) = 0.707 gate — 707 area code, hardcoded in physics
+  // Intensity = alignment × stick magnitude, analog 0→1
+  player.boostIntensity = 0;
+  if (stickL.active) {
+    const mag = Math.sqrt(stickL.dx * stickL.dx + stickL.dy * stickL.dy);
+    if (mag > 0.05) {
+      const northDot = -stickL.dy / mag; // how aligned with north (up = -dy)
+      if (northDot > CONFIG.BOOST.CONE_THRESHOLD) {
+        player.boostIntensity = northDot * mag; // 0→1 analog
+      }
+    }
+  }
+  // Keyboard space = full boost
+  if (input.space) player.boostIntensity = 1.0;
+
+  if (player.boostIntensity > 0) {
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    player.vel.addScaledVector(fwd, CONFIG.PHYSICS.BOOST_ACCEL * player.boostIntensity * dt);
+  }
+
+  // Grapple pull
+  if (grapple.active) {
+    const tDir = new THREE.Vector3().subVectors(grapple.anchor, player.pos);
+    const dist = tDir.length();
+    tDir.normalize();
+    player.vel.addScaledVector(tDir, CONFIG.PHYSICS.HOOK_PULL * (dist / 80) * dt);
+    updateRope();
+  }
+
+  // Air drag — exponential
+  const airDecay = Math.exp(-CONFIG.PHYSICS.AIR_DRAG * dt);
+  player.vel.x  *= airDecay;
+  player.vel.z  *= airDecay;
+  player.vel.y  *= Math.exp(-CONFIG.PHYSICS.AIR_DRAG * 0.2 * dt);
+
+  // Speed cap
+  const spd = player.vel.length();
+  if (spd > CONFIG.PHYSICS.MAX_SPEED) player.vel.multiplyScalar(CONFIG.PHYSICS.MAX_SPEED / spd);
+
+  player.pos.addScaledVector(player.vel, dt);
+
+  // Ground
+  if (player.pos.y <= player.height) {
+    player.pos.y  = player.height;
+    player.vel.y  = 0;
+    const gDecay   = Math.exp(-CONFIG.PHYSICS.GROUND_FRICTION * dt);
+    player.vel.x  *= gDecay;
+    player.vel.z  *= gDecay;
+  }
+
+  camera.position.copy(player.pos);
+
+  // Look stick
+  if (stickR.active) {
+    player.yaw   -= stickR.dx * CONFIG.LOOK.STICK_SENS;
+    player.pitch -= stickR.dy * CONFIG.LOOK.STICK_SENS;
+    player.pitch  = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.pitch));
+  }
+
+  // Look momentum — decays by GROUND_FRICTION
+  if (!stickR.active) {
+    const mAbs = Math.abs(stickR.momentumDx) + Math.abs(stickR.momentumDy);
+    if (mAbs > 0.0005) {
+      const fd = Math.exp(-CONFIG.PHYSICS.GROUND_FRICTION * dt);
+      stickR.momentumDx *= fd; stickR.momentumDy *= fd;
+      player.yaw   -= stickR.momentumDx * CONFIG.LOOK.STICK_SENS;
+      player.pitch -= stickR.momentumDy * CONFIG.LOOK.STICK_SENS;
+      player.pitch  = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.pitch));
+    } else {
+      stickR.momentumDx = 0; stickR.momentumDy = 0;
+    }
+  }
+
+  // Slash cooldown
+  if (player.slashCooldown > 0) player.slashCooldown -= dt;
+
+  // Camera shake
+  if (shakeDur > 0) {
+    shakeDur -= dt;
+    const s = shakeInten * Math.min(1, shakeDur / 0.15);
+    camera.position.x += (Math.random()-0.5) * s * 0.04;
+    camera.position.y += (Math.random()-0.5) * s * 0.04;
+  }
+
+  // Accel for FX
+  const spdNow = player.vel.length();
+  const accel  = (spdNow - player.prevSpeed) / dt;
+  updateInertiaFX(dt, accel);
+
+  // HUD
+  document.getElementById('hud-spd').innerText   = `SPD: ${spdNow.toFixed(1)}`;
+  document.getElementById('hud-alt').innerText   = `ALT: ${player.pos.y.toFixed(1)}`;
+  document.getElementById('hud-accel').innerText = `ACCEL: ${accel.toFixed(1)}`;
+  document.getElementById('hud-boost').innerText = `BOOST: ${Math.round(player.boostIntensity * 100)}%`;
+
+  const status = player.boostIntensity > 0.05 ? 'BOOST'
+               : grapple.active               ? 'ANCHORED'
+               : onGround                     ? 'GROUNDED'
+               :                               'AIR';
+  document.getElementById('hud-status').innerText = status;
+
+  player.prevSpeed = spdNow;
+  scanTargets();
+}
+
+// ── GRAPPLE ───────────────────────────────────────────────
+function scanTargets() {
+  raycaster.setFromCamera(centerNDC, camera);
+  const hits = raycaster.intersectObjects(scene.children, true);
+  const hit  = hits.find(h => h.distance < CONFIG.PHYSICS.MAX_ROPE_DIST && h.object.userData?.collidable);
+  document.getElementById('crosshair').classList.toggle('locked', !!hit);
+  return hit ? hit.point : null;
+}
+
+function fireGrapple() {
+  const target = scanTargets();
+  if (!target) return;
+  releaseGrapple();
+  grapple.active = true;
+  grapple.anchor.copy(target);
+  const geo    = new THREE.BufferGeometry().setFromPoints([player.pos, grapple.anchor]);
+  grapple.mesh = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: CONFIG.COLORS.ROPE }));
+  scene.add(grapple.mesh);
+
+  // Grapple fire burst
+  const toA = new THREE.Vector3().subVectors(grapple.anchor, player.pos).normalize();
+  for (let b = 0; b < CONFIG.SMOKE.GRAPPLE_BURST && particles.length < CONFIG.SMOKE.MAX_PARTICLES; b++) {
+    particles.push({
+      pos: player.pos.clone().addScaledVector(toA, 1.5)
+        .add(new THREE.Vector3((Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3)),
+      vel: new THREE.Vector3(
+        toA.x*(3+Math.random()*8)+(Math.random()-0.5)*4,
+        toA.y*(3+Math.random()*8)+2+Math.random()*5,
+        toA.z*(3+Math.random()*8)+(Math.random()-0.5)*4
+      ),
+      life: 0.5+Math.random(), maxLife: 1.5, blood: false,
+    });
+  }
+}
+
+function releaseGrapple() {
+  grapple.active = false;
+  if (grapple.mesh) {
+    scene.remove(grapple.mesh);
+    grapple.mesh.geometry.dispose();
+    grapple.mesh.material.dispose();
+    grapple.mesh = null;
+  }
+}
+
+function updateRope() {
+  if (!grapple.mesh) return;
+  const arr = grapple.mesh.geometry.attributes.position.array;
+  arr[0] = player.pos.x; arr[1] = player.pos.y - 0.5; arr[2] = player.pos.z;
+  grapple.mesh.geometry.attributes.position.needsUpdate = true;
+}
+
+// ── STICK NORMALIZER ──────────────────────────────────────
+function normalizeStick(rawDx, rawDy) {
+  const R    = CONFIG.LOOK.STICK_RADIUS;
+  const dist = Math.sqrt(rawDx*rawDx + rawDy*rawDy);
+  if (dist === 0) return { dx: 0, dy: 0, vx: 0, vy: 0, mag: 0 };
+  const cap = Math.min(dist, R);
+  const nx  = rawDx / dist;
+  const ny  = rawDy / dist;
+  return { dx: nx*(cap/R), dy: ny*(cap/R), vx: nx, vy: ny, mag: cap/R };
+}
+
+// ── INPUT ─────────────────────────────────────────────────
+function bindInputs() {
+  const knobL  = document.getElementById('knobL');
+  const knobR  = document.getElementById('knobR');
+  const joyLEl = document.getElementById('joyL');
+  const joyREl = document.getElementById('joyR');
+
+  function getBounds(el) {
+    const r = el.getBoundingClientRect();
+    return { cx: r.left+r.width/2, cy: r.top+r.height/2, r: r.width/2+18 };
+  }
+
+  const SLASH_ZONE_Y = () => innerHeight * 0.39;
+
+  document.addEventListener('touchstart', e => {
+    if (e.target.tagName !== 'INPUT') e.preventDefault();
+    for (const t of e.changedTouches) {
+
+      // ── SLASH ZONE — top 39% ──────────────────────────
+      if (t.clientY < SLASH_ZONE_Y()) {
+        slashTouches[t.identifier] = [{ x: t.clientX, y: t.clientY, age: 0 }];
+        slashHistory.push({ x: t.clientX, y: t.clientY, age: 0 });
+        continue;
+      }
+
+      // ── LEFT STICK ────────────────────────────────────
+      const lb = getBounds(joyLEl);
+      if (Math.hypot(t.clientX-lb.cx, t.clientY-lb.cy) < lb.r && !stickL.active) {
+        stickL.active = true; stickL.id = t.identifier;
+        stickL.cx = lb.cx; stickL.cy = lb.cy;
+        knobL.classList.add('active');
+        continue;
+      }
+
+      // ── RIGHT STICK — look + grapple ──────────────────
+      const rb = getBounds(joyREl);
+      if (Math.hypot(t.clientX-rb.cx, t.clientY-rb.cy) < rb.r && !stickR.active) {
+        stickR.active = true; stickR.id = t.identifier;
+        stickR.cx = rb.cx; stickR.cy = rb.cy;
+        stickR.momentumDx = 0; stickR.momentumDy = 0;
+        knobR.classList.add('active');
+        fireGrapple();
+        continue;
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+
+      // Slash zone tracking
+      if (slashTouches[t.identifier]) {
+        slashTouches[t.identifier].push({ x: t.clientX, y: t.clientY, age: 0 });
+        slashHistory.push({ x: t.clientX, y: t.clientY, age: 0 });
+        continue;
+      }
+
+      if (t.identifier === stickL.id) {
+        const n = normalizeStick(t.clientX-stickL.cx, t.clientY-stickL.cy);
+        stickL.dx = n.dx; stickL.dy = n.dy;
+        knobL.style.transform = `translate(calc(-50% + ${n.vx*n.mag*CONFIG.LOOK.STICK_RADIUS*0.7}px), calc(-50% + ${n.vy*n.mag*CONFIG.LOOK.STICK_RADIUS*0.7}px))`;
+        // Knob turns accent when boost active
+        if (player.boostIntensity > 0.05) knobL.classList.add('boost');
+        else knobL.classList.remove('boost');
+      }
+
+      if (t.identifier === stickR.id) {
+        const n = normalizeStick(t.clientX-stickR.cx, t.clientY-stickR.cy);
+        stickR.dx = n.dx; stickR.dy = n.dy;
+        knobR.style.transform = `translate(calc(-50% + ${n.vx*n.mag*CONFIG.LOOK.STICK_RADIUS*0.7}px), calc(-50% + ${n.vy*n.mag*CONFIG.LOOK.STICK_RADIUS*0.7}px))`;
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) {
+
+      // Slash detection on finger lift
+      if (slashTouches[t.identifier]) {
+        detectAndPerformSlash(slashTouches[t.identifier]);
+        delete slashTouches[t.identifier];
+        continue;
+      }
+
+      if (t.identifier === stickL.id) {
+        stickL.active = false; stickL.id = null; stickL.dx = 0; stickL.dy = 0;
+        knobL.style.transform = 'translate(-50%,-50%)';
+        knobL.classList.remove('active'); knobL.classList.remove('boost');
+      }
+
+      if (t.identifier === stickR.id) {
+        stickR.momentumDx = stickR.dx;
+        stickR.momentumDy = stickR.dy;
+        stickR.active = false; stickR.id = null; stickR.dx = 0; stickR.dy = 0;
+        knobR.style.transform = 'translate(-50%,-50%)';
+        knobR.classList.remove('active');
+        releaseGrapple();
+      }
+    }
+  });
+
+  document.addEventListener('touchcancel', () => {
+    stickL.active = false; stickL.dx = 0; stickL.dy = 0;
+    knobL.style.transform = 'translate(-50%,-50%)';
+    knobL.classList.remove('active'); knobL.classList.remove('boost');
+    stickR.momentumDx = stickR.dx; stickR.momentumDy = stickR.dy;
+    stickR.active = false; stickR.dx = 0; stickR.dy = 0;
+    knobR.style.transform = 'translate(-50%,-50%)';
+    knobR.classList.remove('active');
+    releaseGrapple();
+    Object.keys(slashTouches).forEach(k => delete slashTouches[k]);
+  });
+
+  // ── DESKTOP ───────────────────────────────────────────
+  document.getElementById('canvas-container').addEventListener('mousedown', e => {
+    if (!isPointerLocked) { document.body.requestPointerLock(); return; }
+    if (e.button === 0) fireGrapple();
+    if (e.button === 2) input.space = true;
+  });
+  document.addEventListener('mouseup', e => {
+    if (e.button === 0) releaseGrapple();
+    if (e.button === 2) input.space = false;
+  });
+
+  // Desktop slash — mouse swipe in top 39%
+  let mouseSlashHistory = [];
+  let mouseSlashing = false;
+  document.addEventListener('mousemove', e => {
+    if (isPointerLocked) {
+      player.yaw   -= e.movementX * 0.002;
+      player.pitch -= e.movementY * 0.002;
+      player.pitch  = Math.max(-Math.PI/2, Math.min(Math.PI/2, player.pitch));
+    }
+    if (!isPointerLocked && e.buttons === 1 && e.clientY < innerHeight * 0.39) {
+      mouseSlashHistory.push({ x: e.clientX, y: e.clientY, age: 0 });
+      slashHistory.push({ x: e.clientX, y: e.clientY, age: 0 });
+      mouseSlashing = true;
+    }
+  });
+  document.addEventListener('mouseup', () => {
+    if (mouseSlashing) {
+      detectAndPerformSlash(mouseSlashHistory);
+      mouseSlashHistory = []; mouseSlashing = false;
+    }
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    isPointerLocked = document.pointerLockElement === document.body;
+  });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'KeyW')  input.w     = true;
+    if (e.code === 'KeyS')  input.s     = true;
+    if (e.code === 'KeyA')  input.a     = true;
+    if (e.code === 'KeyD')  input.d     = true;
+    if (e.code === 'Space') { input.space = true; e.preventDefault(); }
+    if (e.code === 'KeyF')  { // desktop slash test
+      detectAndPerformSlash([
+        {x:100, y:50, age:0}, {x:200, y:50, age:1}, {x:300, y:50, age:2}
+      ]);
+    }
+  });
+  window.addEventListener('keyup', e => {
+    if (e.code === 'KeyW')  input.w     = false;
+    if (e.code === 'KeyS')  input.s     = false;
+    if (e.code === 'KeyA')  input.a     = false;
+    if (e.code === 'KeyD')  input.d     = false;
+    if (e.code === 'Space') input.space = false;
+  });
+  window.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    slashCanvas.width = innerWidth; slashCanvas.height = innerHeight;
+  });
+}
+
+// ── MAIN LOOP ─────────────────────────────────────────────
+function engineTick() {
+  requestAnimationFrame(engineTick);
+  let dt = clock.getDelta();
+  if (dt > 0.1) dt = 0.1;
+
+  updatePhysics(dt);
+  updateDummies(dt);
+  updateParticles(dt);
+  drawSlashTrail();
+  renderer.render(scene, camera);
+}
+
+window.onload = init;
+</script>
 </body>
 </html>
