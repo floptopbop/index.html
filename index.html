@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>ODM_COMBAT</title>
+<title>ODM_CORE</title>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!--
   ═══════════════════════════════════════════════════════════════
-  ODM_COMBAT — dummy-hunting build on the locked ODM control base
+  ODM_CORE — universal map engine on the locked ODM control base
   ═══════════════════════════════════════════════════════════════
   [CORE]   renderer, modes: live | replay
   [ODM]    dual-stick flight (Test_2 architecture, slider-tuned)
@@ -23,25 +23,25 @@
 <style>
     :root {
     --bg:      #050508; 
-    --deck:    #121016; 
-    --accent:  #7C0A21; 
-    --hi:      #FDF8F5; 
-    --text:    #B2BBC4; 
-    --muted:   #B2DFFD; 
-    --gold:    #D1A751; 
-    --grab:    #2F5C54; 
+    --deck:    #EACCAF; 
+    --accent:  #8F2B33; 
+    --hi:      #062636; 
+    --text:    #000306; 
+    --muted:   #062636; 
+    --gold:    #031C2C; 
+    --grab:    #75755A; 
     --warn:    #C85A32; 
     --steel:   #596275; 
 }
     * { box-sizing:border-box; margin:0; padding:0; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
-    body,html { background:var(--bg); color:var(--text); font-family:'Share Tech Mono',monospace; width:100vw; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+    body,html { background:var(--bg); color:var(--text); font-family:'Share Tech Mono',monospace; width:100vw; height:100vh; overflow:hidden; }
 
-    #canvas-container { flex:1; position:relative; width:100%; overflow:hidden; touch-action:none; }
+    #canvas-container { position:fixed; inset:0; width:100%; height:100%; overflow:hidden; touch-action:none; }
 
     /* ── HUD ── */
     #hud {
         position:fixed; top:16px; left:12px; z-index:40; pointer-events:none;
-        background:rgba(232,213,196,0.85); border-left:3px solid var(--accent);
+        background:rgba(232,213,196,0.85); border-left:1px solid var(--accent);
         padding:5px 9px; font-size:0.42rem; letter-spacing:2px; line-height:2;
         text-transform:lowercase; color:#191B1D;
     }
@@ -51,7 +51,7 @@
 
     #xhair {
         position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-        width:13px; height:13px; border-radius:50%; z-index:40;
+        width:11px; height:11px; border-radius:50%; z-index:40;
         border:2px solid rgba(200,200,200,0.5); pointer-events:none;
         transition:border-color 0.1s, transform 0.1s;
     }
@@ -60,7 +60,7 @@
     /* tumble vignette */
     #tumble-fx {
         position:fixed; inset:0; z-index:35; pointer-events:none; opacity:0;
-        background:radial-gradient(ellipse at center, transparent 40%, rgba(138,3,3,0.45) 100%);
+        background:radial-gradient(ellipse at center, transparent 40%, rgba(138,3,3,0.3) 100%);
         transition:opacity 0.15s;
     }
     #tumble-fx.on { opacity:1; }
@@ -69,51 +69,75 @@
     #replay-bar {
         display:none; position:fixed; top:10px; left:50%; transform:translateX(-50%);
         z-index:60; align-items:center; gap:10px;
-        background:rgba(30,33,36,0.92); border-bottom:2px solid var(--gold);
-        padding:6px 12px; border-radius:3px;
+        background:rgba(30,33,36,0.75); border-bottom:2px solid var(--gold);
+        padding:6px 6px; border-radius:1px;
     }
-    #replay-bar .rl { font-size:0.45rem; letter-spacing:3px; color:var(--gold); }
-    #replay-progress { width:120px; height:3px; background:var(--muted); border-radius:2px; overflow:hidden; }
+    #replay-bar .rl { font-size:0.9rem; letter-spacing:1px; color:var(--accent); }
+    #replay-progress { width:120px; height:1px; background:var(--muted); border-radius:2px; overflow:hidden; }
     #replay-progress .p { height:100%; width:0%; background:var(--gold); }
 
     /* ── JOYSTICKS — pinned to the canvas, ride above the bottom deck ── */
     .odm-joy {
-        position:absolute; bottom:20px; z-index:50; width:92px; height:92px; border-radius:50%;
+        position:absolute; bottom:20px; z-index:50; width:92px; height:92px; border-radius:100%;
         background:rgba(25,27,29,0.6); border:1.5px dashed rgba(138,3,3,0.8);
         box-shadow:0 4px 16px rgba(0,0,0,0.4); pointer-events:none; touch-action:none;
     }
-    #joyL { left:22px; } #joyR { right:22px; }
+    #joyL { left:45px; } #joyR { right:45px; }
     .odm-knob {
-        position:absolute; width:42px; height:42px; border-radius:50%;
+        position:absolute; width:42px; height:42px; border-radius:100%;
         background:rgba(138,3,3,1); border:1.5px solid var(--accent);
         top:50%; left:50%; transform:translate(-50%,-50%);
         pointer-events:none; will-change:transform; transition:background 0.1s, box-shadow 0.1s;
     }
     #knobL.boost { background:rgba(212,175,55,0.4); border-color:var(--gold); box-shadow:0 0 24px rgba(212,175,55,0.8); }
     #knobR.active { background:rgba(13,216,36,0.4); border-color:var(--grab); box-shadow:0 0 24px rgba(13,216,36,0.6); }
-    .odm-joy .j-lbl { position:absolute; top:-13px; left:50%; transform:translateX(-50%); font-size:0.38rem; letter-spacing:3px; color:rgba(138,3,3,0.9); white-space:nowrap; }
+    .odm-joy .j-lbl { position:absolute; top:-11px; left:50%; transform:translateX(-50%); font-size:0.38rem; letter-spacing:1px; color:rgba(138,3,3,0.9); white-space:nowrap; }
 
-    /* ── DECK (docked BOTTOM) ── */
-    #ui-deck { flex:0 0 auto; width:100%; background:var(--deck); border-top:2px solid var(--accent); display:flex; flex-direction:column; box-shadow:0 -8px 24px rgba(0,0,0,0.5); opacity:0.4; }
-    #ui-deck.peek { opacity:0.97; }
-    #ui-deck.collapsed .deck-body { display:none; }
-    #deck-tab { height:28px; min-height:28px; display:flex; align-items:center; justify-content:space-between; padding:0 10px 0 14px; font-size:0.6rem; letter-spacing:4px; cursor:pointer; border-bottom:1px solid rgba(232,213,196,0.05); }
-    #deck-toggle { color:var(--accent); margin-right:6px; transition:transform 0.4s; }
-    #ui-deck.collapsed #deck-toggle { transform:rotate(-90deg); }
-    .deck-body { display:flex; flex-direction:column; padding:6px 10px; overflow-y:auto; max-height:44vh; touch-action:pan-y; }
-    .col { display:flex; flex-direction:column; gap:3px; border-bottom:1px solid rgba(232,213,196,0.04); padding-bottom:5px; margin-bottom:4px; }
-    .col-lbl { font-size:0.4rem; letter-spacing:3px; color:var(--muted); text-transform:lowercase; border-bottom:1px dashed rgba(232,213,196,0.5); padding-bottom:2px; margin-bottom:1px; }
-    input[type="range"] { width:100%; accent-color:var(--accent); height:3px; background:#2A2D30; cursor:pointer; -webkit-appearance:none; margin:3px 0; touch-action:manipulation; }
+    /* ── DECK (docked BOTTOM, floats OVER the canvas — never resizes it) ── */
+    /* fully off-screen when closed; only the tiny pull-tab remains visible */
+    #ui-deck { position:fixed; left:0; right:0; bottom:0; z-index:60; width:100%; background:var(--deck); border-top:2px solid var(--accent); display:flex; flex-direction:column; box-shadow:0 -8px 24px rgba(0,0,0,0.5); transform:translateY(100%); transition:transform 0.25s ease; }
+    #ui-deck.open { transform:translateY(0); }
+    #deck-tab { height:26px; min-height:26px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 10px 0 4px; font-size:0.6rem; letter-spacing:4px; cursor:pointer; border-bottom:1px solid rgba(232,213,196,0.2); }
+    #deck-tab > span:first-child { flex-shrink:0; white-space:nowrap; }
+    #deck-tab > div:last-child {
+        display:flex; gap:6px; flex-shrink:1; min-width:0;
+        overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;
+        scrollbar-width:none; -ms-overflow-style:none;
+    }
+    #deck-tab > div:last-child::-webkit-scrollbar { display:none; }
+    #deck-tab > div:last-child .icon-btn { flex-shrink:0; white-space:nowrap; }
+    #deck-toggle { color:var(--accent); margin-right:12px; transition:transform 0.4s; transform:rotate(-90deg); }
+    #ui-deck.open #deck-toggle { transform:rotate(0deg); }
+    .deck-body { display:flex; flex-direction:column; padding:6px 10px; overflow-y:auto; max-height:40vh; touch-action:pan-y; }
+    @media (orientation: landscape) {
+        .deck-body { max-height:60vh; }
+    }
+    /* tiny pull-tab: the only thing visible when the deck is closed */
+    #deck-pull {
+        position:fixed; left:5%; bottom:0; z-index:61;
+        width:20px; height:20px;
+        background:var(--deck); border:1px solid var(--accent); border-bottom:none;
+        border-radius:6px 6px 0 0;
+        display:flex; align-items:center; justify-content:center;
+        cursor:pointer; box-shadow:0 -4px 12px rgba(0,0,0,0.4);
+        transition:opacity 0.2s ease, transform 0.2s ease;
+    }
+    #deck-pull span { color:var(--accent); font-size:0.55rem; line-height:1; }
+    #ui-deck.open + #deck-pull { opacity:0; transform:translateY(100%); pointer-events:none; }
+    .col { display:flex; flex-direction:column; gap:1px; border-bottom:1px solid rgba(232,213,196,0.04); padding-bottom:5px; margin-bottom:4px; }
+    .col-lbl { font-size:0.4rem; letter-spacing:1px; color:var(--muted); text-transform:lowercase; border-bottom:1px dashed rgba(232,213,196,0.5); padding-bottom:2px; margin-bottom:1px; }
+    input[type="range"] { width:100%; accent-color:var(--accent); height:1px; background:#2A2D30; cursor:pointer; -webkit-appearance:none; margin:1px 0; touch-action:manipulation; }
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); border:1px solid var(--bg); }
     .range-row { display:flex; flex-direction:column; gap:1px; margin-bottom:2px; }
     .range-lbl { font-size:0.8rem; color:var(--muted); text-transform:lowercase; display:flex; justify-content:space-between; letter-spacing:1px; }
     .range-val { color:var(--gold); }
-    .icon-btn { background:transparent; border:1px solid rgba(232,213,196,0.1); color:var(--text); font-family:inherit; font-size:0.6rem; letter-spacing:2px; padding:2px 8px; cursor:pointer; transition:all 0.3s; border-radius:4px; }
+    .icon-btn { background:transparent; border:1px solid rgba(232,213,196,0.1); color:var(--text); font-family:inherit; font-size:1rem; letter-spacing:2px; padding:2px 8px; cursor:pointer; transition:all 0.3s; border-radius:4px; }
     .icon-btn:hover, .icon-btn.active { background:rgba(138,3,3,0.2); border-color:var(--accent); color:var(--hi); }
     .icon-btn.gold { border-color:rgba(212,175,55,0.4); color:var(--gold); }
 
     #toast-container { position:fixed; top:72px; right:14px; z-index:9999; display:flex; flex-direction:column; gap:6px; pointer-events:none; }
-    .toast { background:rgba(30,33,36,0.95); border-bottom:1px solid var(--accent); color:var(--hi); padding:5px 10px; font-size:0.45rem; letter-spacing:3px; border-radius:3px; animation:tIn 0.5s ease-out, tOut 1.2s ease-in 2.2s forwards; }
+    .toast { background: #C5B49D;
+border-bottom:1px solid var(--accent); color:var(--hi); padding:5px 10px; font-size:0.45rem; letter-spacing:1px; border-radius:1px; animation:tIn 0.5s ease-out, tOut 1.2s ease-in 2.2s forwards; }
     @keyframes tIn { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
     @keyframes tOut { from{opacity:1;} to{opacity:0;} }
 </style>
@@ -125,12 +149,15 @@
     <div class="odm-joy" id="joyR"><span class="j-lbl">look · touch = grapple</span><div class="odm-knob" id="knobR"></div></div>
 </div>
 
-<div id="ui-deck" class="collapsed">
+<div id="ui-deck">
     <div id="deck-tab">
-        <span><span id="deck-toggle">▼</span> odm_bat</span>
+        <span><span id="deck-toggle">▼</span> settings</span>
         <div style="display:flex;gap:6px;">
+            <button class="icon-btn gold" id="btn-save">save</button>
+            <button class="icon-btn gold" id="btn-load">load</button>
             <button class="icon-btn gold" id="btn-watch">watch</button>
-            <button class="icon-btn gold" id="btn-terrain">terrain</button>
+            <button class="icon-btn gold" id="btn-terrain">u</button>
+            <button class="icon-btn gold" id="btn-mode">mode</button>
             <button class="icon-btn gold" id="btn-dummies">dummies</button>
             <button class="icon-btn" id="btn-regen">regen</button>
             <button class="icon-btn" id="btn-reset">reset</button>
@@ -139,19 +166,21 @@
     <div class="deck-body">
         <div class="col"><div class="col-lbl">movement</div><div id="move-sliders"></div></div>
         <div class="col"><div class="col-lbl">camera + fx</div><div id="cam-sliders"></div></div>
-        <div class="col"><div class="col-lbl">combat</div><div id="combat-sliders"></div></div>
+        <div class="col"><div class="col-lbl">mode · tuning</div><div id="combat-sliders"></div></div>
         <div class="col"><div class="col-lbl">atmosphere</div><div id="atmo-sliders"></div></div>
         <div class="col"><div class="col-lbl">world</div><div id="world-sliders"></div></div>
     </div>
 </div>
+<div id="deck-pull"><span>UI</span></div>
 
 <div id="tumble-fx"></div>
 <div id="toast-container"></div>
+<input type="file" id="preset-file" accept=".json,application/json" style="display:none">
 <input type="file" id="terrain-file" accept=".json,application/json,image/*" style="display:none">
 
 <div id="hud">
-    <div>odm_combat</div>
-    <div>spd <span id="h-spd">0</span> &nbsp; alt <span id="h-alt">0</span> &nbsp; kills <span id="h-kills">0</span></div>
+    <div id="h-title">odm_combat</div>
+    <div>spd <span id="h-spd">0</span> &nbsp; alt <span id="h-alt">0</span><span id="h-killwrap"> &nbsp; kills <span id="h-kills">0</span></span></div>
     <div class="st" id="h-status">idle</div>
 </div>
 <div id="xhair"></div>
@@ -174,28 +203,30 @@ const WORLD = { size:22000, half:11000 };
 const PI_2 = Math.PI/2;
 
 const M = {
-    gravity:      -90,
+    gravity:      -40,
     airDrag:      0.03,
     groundFric:   9,
     accelGround:  260,
-    accelAir:     300,
-    boostAccel:   420,
+    accelAir:     260,
+    boostAccel:   180,
     boostCone:    0.6,
     hookPull:     260,
-    ropeNorm:     60,
-    maxRopeDist:  2800,
-    maxSpeed:     1100,
-    radius:       6,
-    height:       9,
+    ropeNorm:     40,
+    maxRopeDist:  4800,
+    maxSpeed:     2100,
+    radius:       1,
+    height:       1,
 
-    eyeOffset:    12,
-    camLag:       0.22,
-    hFov:         70,
-    hFovMax:      96,
-    fovExpandRate:0.3,
-    fovRecoverRate:0.015,
-    stickSens:    0.06,
-    stickRadius:  70,
+    eyeOffset:    .22,
+    camLag:       0.2,
+    hFov:         60,
+    hFovMax:      80,
+    fovExpandRate:0.5,
+    fovRecoverRate:0.5,
+    stickSens:    0.08,
+    stickRadius:  125,
+    lookCurve:    1,
+    moveCurve:    1,
     rollScale:    0.0012,
     rollMax:      0.22,
 
@@ -203,21 +234,21 @@ const M = {
     bounce:       1.5,
     propFric:     2.2,
     massScale:    1,
-    tumbleThresh: 120,
-    tumbleTime:   3,
-    tumbleSpin:   18,
+    tumbleThresh: 1120,
+    tumbleTime:   .5,
+    tumbleSpin:   30,
     recordSecs:   20,
 
     // smoke
-    smokeMax:     500,
+    smokeMax:     900,
     smokeBase:    8,
     smokeMaxRate: 110,
-    smokeSize:    26,
+    smokeSize:    22,
     faceRadius:   34,
     lifeMin:      0.4,
-    lifeMax:      5,
-    upDrift:      14,
-    spread:       12,
+    lifeMax:      10,
+    upDrift:      54,
+    spread:       22,
 };
 
 const MOVE_SLIDERS = [
@@ -229,13 +260,35 @@ const MOVE_SLIDERS = [
     { lbl:'hook pull',    min:20,  max:1200, step:10,   get:()=>M.hookPull,     set:v=>M.hookPull=v },
     { lbl:'pull ramp',    min:10,  max:400,  step:5,    get:()=>M.ropeNorm,     set:v=>M.ropeNorm=v },
     { lbl:'rope reach',   min:300, max:8000, step:50,   get:()=>M.maxRopeDist,  set:v=>M.maxRopeDist=v },
-    { lbl:'max speed',    min:100, max:4000, step:25,   get:()=>M.maxSpeed,     set:v=>M.maxSpeed=v },
+    { lbl:'max speed',    min:100, max:8000, step:25,   get:()=>M.maxSpeed,     set:v=>M.maxSpeed=v },
     { lbl:'air drag',     min:0,   max:0.2,  step:0.005,get:()=>M.airDrag,      set:v=>M.airDrag=v },
     { lbl:'ground fric',  min:0,   max:20,   step:0.5,  get:()=>M.groundFric,   set:v=>M.groundFric=v },
     { lbl:'body radius',  min:1,   max:24,   step:0.5,  get:()=>M.radius,       set:v=>{M.radius=v; if(ghost)rebuildGhost();} },
     { lbl:'ride height',  min:1,   max:30,   step:0.5,  get:()=>M.height,       set:v=>{M.height=v; if(ghost)rebuildGhost();} },
+    { lbl:'move curve',   min:0.3, max:3,    step:0.1,  get:()=>M.moveCurve,    set:v=>M.moveCurve=v },
 ];
+// ╔══════════════════════════════════════════════════════════╗
+// ║ [JOY] joystick layout — size & placement, live sliders    ║
+// ╚══════════════════════════════════════════════════════════╝
+const JOY={size:60, side:60, bottom:40};
+function setJoyLayout(){
+    const joyL=document.getElementById('joyL'),joyR=document.getElementById('joyR');
+    const knobL=document.getElementById('knobL'),knobR=document.getElementById('knobR');
+    for(const el of [joyL,joyR]){
+        el.style.width=JOY.size+'px';
+        el.style.height=JOY.size+'px';
+        el.style.bottom=JOY.bottom+'px';
+    }
+    joyL.style.left=JOY.side+'px';
+    joyR.style.right=JOY.side+'px';
+    const knob=JOY.size*.25;                         // keeps the 42/92 ratio
+    for(const k of [knobL,knobR]){k.style.width=knob+'px';k.style.height=knob+'px';}
+    M.stickRadius=Math.round(JOY.size*1.2);           // input travel scales with pad
+}
 const CAM_SLIDERS = [
+    { lbl:'joy size',     min:64,   max:170, step:2,    get:()=>JOY.size,        set:v=>{JOY.size=v;setJoyLayout();} },
+    { lbl:'joy side',     min:8,    max:180, step:2,    get:()=>JOY.side,        set:v=>{JOY.side=v;setJoyLayout();} },
+    { lbl:'joy height',   min:4,    max:220, step:2,    get:()=>JOY.bottom,      set:v=>{JOY.bottom=v;setJoyLayout();} },
     { lbl:'eye offset',   min:1,    max:60,  step:0.5,  get:()=>M.eyeOffset,     set:v=>M.eyeOffset=v },
     { lbl:'cam lag',      min:0.02, max:1,   step:0.01, get:()=>M.camLag,        set:v=>M.camLag=v },
     { lbl:'fov',          min:30,   max:110, step:1,    get:()=>M.hFov,          set:v=>M.hFov=v },
@@ -243,6 +296,7 @@ const CAM_SLIDERS = [
     { lbl:'fov expand',   min:0.02, max:1,   step:0.02, get:()=>M.fovExpandRate, set:v=>M.fovExpandRate=v },
     { lbl:'fov recover',  min:0.002,max:0.2, step:0.002,get:()=>M.fovRecoverRate,set:v=>M.fovRecoverRate=v },
     { lbl:'look sens',    min:0.01, max:0.2, step:0.005,get:()=>M.stickSens,     set:v=>M.stickSens=v },
+    { lbl:'look curve',   min:0.3,  max:3,   step:0.1,  get:()=>M.lookCurve,     set:v=>M.lookCurve=v },
     { lbl:'lean amount',  min:0,    max:0.01,step:0.0002,get:()=>M.rollScale,    set:v=>M.rollScale=v },
     { lbl:'smoke size',   min:0,    max:80,  step:1,    get:()=>M.smokeSize,     set:v=>{M.smokeSize=v; if(pMat)pMat.size=v;} },
     { lbl:'smoke rate',   min:0,    max:400, step:5,    get:()=>M.smokeMaxRate,  set:v=>M.smokeMaxRate=v },
@@ -252,11 +306,20 @@ const CAM_SLIDERS = [
 const COMBAT_SLIDERS = [
     { lbl:'blade reach',     min:60,  max:800, step:10,   get:()=>C.bladeRadius,   set:v=>C.bladeRadius=v },
     { lbl:'swipe px',        min:15,  max:300, step:5,    get:()=>C.swipePx,       set:v=>C.swipePx=v },
-    { lbl:'blade cooldown',  min:0,   max:1.5, step:0.05, get:()=>C.bladeCooldown, set:v=>C.bladeCooldown=v },
-    { lbl:'fly-thru kill',   min:0,   max:300, step:5,    get:()=>C.proxKill,      set:v=>C.proxKill=v },
+    { lbl:'blade cooldown',  min:0,   max:1.5, step:0.01, get:()=>C.bladeCooldown, set:v=>C.bladeCooldown=v },
     { lbl:'dummy count',     min:5,   max:120, step:5,    get:()=>C.dummyCount,    set:v=>{C.dummyCount=v;} },
     { lbl:'dummy size',      min:0.3, max:3,   step:0.1,  get:()=>C.dummyScale,    set:v=>{C.dummyScale=v;} },
     { lbl:'blood burst',     min:20,  max:400, step:10,   get:()=>C.bloodBurst,    set:v=>C.bloodBurst=v },
+    { lbl:'body solidity',   min:0,   max:1,   step:0.05, get:()=>C.bodySolid,     set:v=>C.bodySolid=v },
+    { lbl:'bump KO speed',   min:100, max:1500,step:20,   get:()=>C.bumpKO,        set:v=>C.bumpKO=v },
+    { lbl:'titans',      min:0,   max:12,  step:1,   get:()=>T.count,     set:v=>{T.count=v;} },
+    { lbl:'titan size',  min:0.5, max:3,   step:0.1, get:()=>T.scale,     set:v=>{T.scale=v;} },
+    { lbl:'titan speed', min:10,  max:220, step:5,   get:()=>T.walkSpeed, set:v=>{T.walkSpeed=v;} },
+    { lbl:'arm hp',      min:1,   max:6,   step:1,   get:()=>T.armHP,     set:v=>{T.armHP=v;} },
+    { lbl:'ragdoll weight',  min:1,   max:4,   step:0.1,  get:()=>C.ragdollGravMult,set:v=>C.ragdollGravMult=v },
+    { lbl:'ragdoll bounce',  min:0,   max:0.5, step:0.01, get:()=>C.ragdollBounce, set:v=>C.ragdollBounce=v },
+    { lbl:'ragdoll spin',    min:0,   max:15,  step:0.5,  get:()=>C.ragdollSpin,   set:v=>C.ragdollSpin=v },
+    { lbl:'ragdoll squash',  min:0,   max:1,   step:0.05, get:()=>C.ragdollSquash, set:v=>C.ragdollSquash=v },
     { lbl:'blood life',      min:0.5, max:10,  step:0.5,  get:()=>C.bloodLife,     set:v=>C.bloodLife=v },
     { lbl:'tumble threshold',min:50,  max:1200,step:10,   get:()=>M.tumbleThresh,  set:v=>M.tumbleThresh=v },
     { lbl:'tumble time',     min:0.2, max:3,   step:0.1,  get:()=>M.tumbleTime,    set:v=>M.tumbleTime=v },
@@ -285,7 +348,7 @@ function buildSliderColumn(containerId, defs){
 // ╚══════════════════════════════════════════════════════════╝
 let simTime=0;
 let MODE='live';   // 'live' | 'replay'
-
+const JOY_TOUCH_RADIUS = 0;
 const cc=document.getElementById('canvas-container');
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0xC8E3D4);
@@ -294,6 +357,8 @@ scene.fog=new THREE.Fog(0xC8E3D4, 2000, 13000);
 const camera=new THREE.PerspectiveCamera(70,1,0.5,30000);
 camera.rotation.order='YXZ';
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.0;
 let renderScale=Math.min(devicePixelRatio,2);
 renderer.setPixelRatio(renderScale);
 cc.appendChild(renderer.domElement);
@@ -306,7 +371,9 @@ sun.position.set(1000,2500,1500); scene.add(sun);
 function setHFov(hFovDeg){
     const aspect=cc.clientWidth/Math.max(1,cc.clientHeight);
     const vRad=2*Math.atan(Math.tan(THREE.MathUtils.degToRad(hFovDeg)/2)/aspect);
-    camera.fov=THREE.MathUtils.radToDeg(vRad);
+    let vDeg=THREE.MathUtils.radToDeg(vRad);
+    vDeg=Math.min(100,Math.max(45,vDeg)); // safety clamp: never let aspect-ratio extremes push FOV into fisheye/tunnel-vision territory
+    camera.fov=vDeg;
     camera.aspect=aspect;
     camera.updateProjectionMatrix();
 }
@@ -483,15 +550,26 @@ function buildTerrainMesh(){
     const d = TER.d, size = WORLD.size, half = size/2, step = size/(d-1);
     const geo = new THREE.BufferGeometry();
     const verts = new Float32Array(d*d*3), cols = new Float32Array(d*d*3), idxs = [];
+    // fallback palette is a bounded low→high blend (never approaches white,
+    // no matter how bright the source photo is) — used only when the
+    // heightmap didn't carry its own per-pixel color data
+    const LOW=[0.20,0.24,0.15], HIGH=[0.55,0.52,0.36];
     for (let z = 0; z < d; z++)
         for (let x = 0; x < d; x++){
             const vi = z*d + x;
             verts[vi*3]   = -half + x*step;
             verts[vi*3+1] = TER.heights[vi] * TER.baseScale;   // mult applied via mesh.scale.y
             verts[vi*3+2] = -half + z*step;
-            cols[vi*3]   = TER.colors ? TER.colors[vi*3]   : 0.36 + TER.heights[vi]*0.42;
-            cols[vi*3+1] = TER.colors ? TER.colors[vi*3+1] : 0.48 + TER.heights[vi]*0.29;
-            cols[vi*3+2] = TER.colors ? TER.colors[vi*3+2] : 0.44 + TER.heights[vi]*0.25;
+            if (TER.colors){
+                cols[vi*3]   = TER.colors[vi*3];
+                cols[vi*3+1] = TER.colors[vi*3+1];
+                cols[vi*3+2] = TER.colors[vi*3+2];
+            } else {
+                const t=TER.heights[vi];
+                cols[vi*3]   = LOW[0]+(HIGH[0]-LOW[0])*t;
+                cols[vi*3+1] = LOW[1]+(HIGH[1]-LOW[1])*t;
+                cols[vi*3+2] = LOW[2]+(HIGH[2]-LOW[2])*t;
+            }
         }
     for (let z = 0; z < d-1; z++)
         for (let x = 0; x < d-1; x++){
@@ -523,12 +601,17 @@ function loadTerrainJSON(data){
     TER.d = d;
     TER.heights = new Float32Array(d*d);
     TER.colors  = new Float32Array(d*d*3);
+    // ODM_FORGE has exported both 0-1 normalized and raw 0-255 RGB in the
+    // past — if any component is >1 assume 0-255 and rescale the whole
+    // point, otherwise every bright photo blows the vertex color channel
+    // past 1.0 and the shader clips it straight to white.
     for (const pt of pts){
         const vi = pt.gridIndex.y * d + pt.gridIndex.x;
         TER.heights[vi] = pt.elevationNormalized;
-        TER.colors[vi*3]   = pt.colorRGB[0];
-        TER.colors[vi*3+1] = pt.colorRGB[1];
-        TER.colors[vi*3+2] = pt.colorRGB[2];
+        const c=pt.colorRGB, k=(c[0]>1||c[1]>1||c[2]>1)?(1/255):1;
+        TER.colors[vi*3]   = c[0]*k;
+        TER.colors[vi*3+1] = c[1]*k;
+        TER.colors[vi*3+2] = c[2]*k;
     }
     TER.baseScale = 50;
     TER.active = true;
@@ -915,10 +998,44 @@ function _rayAABB(o, d, s, maxT){
     }
     return tmin;
 }
+let _scanT=null,_scanP=null,_scanD=null;  // titan/part/dummy under the crosshair
+const _ocV=new THREE.Vector3();
+const _dumBox={x:0,z:0,hw:0,hd:0,baseY:0,topY:0};
+const _capA=new THREE.Vector3(), _capB=new THREE.Vector3(), _capBA=new THREE.Vector3(), _capOA=new THREE.Vector3();
+// ray vs capsule (segment a→b, radius r). Returns t or -1. Tracks the real
+// silhouette of a standing body instead of one fat bounding sphere.
+function _rayCapsule(o, d, a, b, r, maxT){
+    let best=-1;
+    _capBA.subVectors(b,a);
+    _capOA.subVectors(o,a);
+    const baba=_capBA.lengthSq(), bard=_capBA.dot(d), baoa=_capBA.dot(_capOA);
+    const rdoa=d.dot(_capOA), oaoa=_capOA.lengthSq();
+    const A=baba-bard*bard, B=baba*rdoa-baoa*bard, Cc=baba*oaoa-baoa*baoa-r*r*baba;
+    if(A>1e-8){                                   // cylinder side wall
+        const h=B*B-A*Cc;
+        if(h>=0){
+            const t=(-B-Math.sqrt(h))/A;
+            if(t>=0&&t<maxT){
+                const y=baoa+t*bard;
+                if(y>0&&y<baba)best=t;
+            }
+        }
+    }
+    // sphere caps — tested independently so rays parallel to the body
+    // axis (hooking a head from straight above) still connect
+    _capOA.subVectors(o,a);
+    let bb=_capOA.dot(d), c2=_capOA.lengthSq()-r*r, disc=bb*bb-c2;
+    if(disc>=0){ const tc=-bb-Math.sqrt(disc); if(tc>=0&&tc<maxT&&(best<0||tc<best))best=tc; }
+    _capOA.subVectors(o,b);
+    bb=_capOA.dot(d); c2=_capOA.lengthSq()-r*r; disc=bb*bb-c2;
+    if(disc>=0){ const tc=-bb-Math.sqrt(disc); if(tc>=0&&tc<maxT&&(best<0||tc<best))best=tc; }
+    return best;
+}
 function scanHit(){
     aimRay.setFromCamera(cNDC,camera);
     const o = aimRay.ray.origin, d = aimRay.ray.direction;
     let bestT = M.maxRopeDist, hitPt = null;
+    _scanT=null;_scanP=null;_scanD=null;
 
     // ground (flat plane, or heightfield march when terrain is loaded)
     {
@@ -928,7 +1045,44 @@ function scanHit(){
     // static AABBs (walls + every tree trunk)
     for (const st of statics){
         const t = _rayAABB(o, d, st, bestT);
-        if (t >= 0 && t < bestT){ bestT = t; hitPt = _hitV.copy(o).addScaledVector(d, t); }
+        if (t >= 0 && t < bestT){ bestT = t; hitPt = _hitV.copy(o).addScaledVector(d, t); _scanT=null;_scanP=null;_scanD=null; }
+    }
+    // dummies (ray-capsule feet→head) — hooks track the real silhouette,
+    // no more locking onto empty air past a body's edge
+    for (const dm of dummies){
+        const seg=Math.max(0,dm.half-dm.r);
+        _capA.set(dm.pos.x,dm.pos.y-seg,dm.pos.z);
+        _capB.set(dm.pos.x,dm.pos.y+seg,dm.pos.z);
+        const t=_rayCapsule(o,d,_capA,_capB,dm.r,bestT);
+        if (t>=0 && t<bestT){
+            bestT=t; hitPt=_hitV.copy(o).addScaledVector(d,t);
+            _scanT=null;_scanP=null;_scanD=dm;
+        }
+    }
+    // titan parts (ray-sphere) — hooks land on walking flesh
+    for (const t of titans){
+        for (const p of t.parts){
+            if (p.hp<0) continue;
+            // nape occlusion — the crit sphere only exists when approached
+            // from behind. From the front the ray falls through to torso/head,
+            // so you can't lock the kill spot through the body.
+            if (p.name==='nape'){
+                _tf.set(Math.sin(t.yaw),0,Math.cos(t.yaw));
+                _tp.subVectors(o,t.g.position); _tp.y=0;
+                if (_tp.lengthSq()>1e-6){ _tp.normalize(); if(_tf.dot(_tp)>-T.napeBehind) continue; }
+            }
+            partWorld(t,p,_pw);
+            const r=p.r*T.scale;
+            _ocV.subVectors(o,_pw);
+            const b=_ocV.dot(d), c2=_ocV.lengthSq()-r*r;
+            const disc=b*b-c2;
+            if (disc<0) continue;
+            const tHit=-b-Math.sqrt(disc);
+            if (tHit>=0 && tHit<bestT){
+                bestT=tHit; hitPt=_hitV.copy(o).addScaledVector(d,tHit);
+                _scanT=t; _scanP=p; _scanD=null;
+            }
+        }
     }
     const locked=!!hitPt;
     if(locked!==_lastLocked){ EL.xhair.classList.toggle('locked',locked); _lastLocked=locked; }
@@ -939,20 +1093,34 @@ function fireGrapple(){
     const pt=scanHit(); if(!pt)return;
     releaseGrapple();
     grapple.active=true; grapple.anchor.copy(pt);
+    grapple.tT=_scanT; grapple.tP=_scanP; grapple.tD=_scanD;
+    if(grapple.tD){
+        grapple.ox=pt.x-grapple.tD.pos.x;
+        grapple.oy=pt.y-grapple.tD.pos.y;
+        grapple.oz=pt.z-grapple.tD.pos.z;
+    }
+    if(grapple.tT){
+        partWorld(grapple.tT,grapple.tP,_pw);
+        const c=Math.cos(grapple.tT.yaw),sn=Math.sin(grapple.tT.yaw);
+        const wx=pt.x-_pw.x, wy=pt.y-_pw.y, wz=pt.z-_pw.z;
+        grapple.ox=wx*c-wz*sn; grapple.oy=wy; grapple.oz=wx*sn+wz*c;
+    }
     const geo=new THREE.BufferGeometry().setFromPoints([player.pos,pt]);
     grapple.line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x7D7D85}));
     scene.add(grapple.line);
-    for(let b=0;b<26&&particles.length<M.smokeMax;b++)
-        emit(pt.clone(),new THREE.Vector3((Math.random()-0.5)*24,Math.random()*16+4,(Math.random()-0.5)*24),1.1);
+    for(let b=0;b<44&&particles.length<M.smokeMax;b++)
+        emit(pt.clone(),new THREE.Vector3((Math.random()-0.5)*46,Math.random()*30+10,(Math.random()-0.5)*46),0.55);
 }
 function releaseGrapple(){
     grapple.active=false;
+    grapple.tT=null; grapple.tP=null; grapple.tD=null;
     if(grapple.line){scene.remove(grapple.line);grapple.line.geometry.dispose();grapple.line.material.dispose();grapple.line=null;}
 }
 function updateRope(){
     if(!grapple.line)return;
     const a=grapple.line.geometry.attributes.position.array;
     a[0]=player.pos.x;a[1]=player.pos.y-2;a[2]=player.pos.z;
+    a[3]=grapple.anchor.x;a[4]=grapple.anchor.y;a[5]=grapple.anchor.z;
     grapple.line.geometry.attributes.position.needsUpdate=true;
 }
 
@@ -1041,14 +1209,26 @@ function updateSmoke(dt){
 // ╚══════════════════════════════════════════════════════════╝
 const C={
     dummyCount:35, dummyScale:1.0, dummyRadius:70, dummyHeight:220,
-    bladeRadius:340, bladeCooldown:0.15, swipePx:60, swipeFrames:12, facingDot:0.35,
-    proxKill:110, ragdollDrag:1.5, settleSpeed:14, despawnTime:2.6,
+    bladeRadius:400, bladeCooldown:0.15, swipePx:60, swipeFrames:12, facingDot:0.35,
+    ragdollDrag:1.5, settleSpeed:14, despawnTime:12.6,
     bloodBurst:120, bloodLife:2.5,
+    ragdollGravMult:12.4, ragdollBounce:0.8, ragdollSpin:7, ragdollSquash:0.9,
+    bodySolid:0.95, bumpKO:8420,   // player-vs-body collision: push-out strength · speed that ragdolls a dummy on contact
 };
+// ── pluggable game modes ── combat is one module, not the whole engine.
+// non-combat modes run the same movement/world with combat actors stripped.
+let GAME_MODE='combat';
+const GAMEMODES={
+  combat:  {name:'combat',   hud:'odm_combat'},
+  explorer:{name:'explorer', hud:'odm_explorer'},
+  sandbox: {name:'sandbox (props soon)', hud:'odm_sandbox'},
+};
+const MODE_ORDER=['combat','explorer','sandbox'];
 const dummies=[];
 let killCount=0, slashCD=0;
-let _dumGeo=null;
-const _dumMat=new THREE.MeshLambertMaterial({color:0x993230});
+let _limbGeo=null, _headGeo=null;
+const _bodyMat=new THREE.MeshLambertMaterial({color:0x993230});
+const _headMat=new THREE.MeshLambertMaterial({color:0xA8453D});
 const _toD=new THREE.Vector3(), _imp=new THREE.Vector3(), _bv=new THREE.Vector3(), _bp=new THREE.Vector3();
 const EL_KILLS=document.getElementById('h-kills');
 
@@ -1061,11 +1241,43 @@ function emitBlood(pos,vel){
     }
 }
 
+// humanoid build — legs/torso/arms share one unit cylinder, head shares one
+// unit sphere; only per-instance scale/position differ, so each dummy still
+// costs ~5 cheap draw calls instead of one big mesh (same trick the titan
+// rig already uses). Hit-test capsule (d.pos/d.r/d.half) is unchanged, so
+// grapple lock-on and slash reach both keep working exactly as before.
 function spawnOne(){
     const h=C.dummyHeight*C.dummyScale, r=C.dummyRadius*C.dummyScale;
-    if(!_dumGeo)_dumGeo=new THREE.CylinderGeometry(1,1,1,9);
-    const mesh=new THREE.Mesh(_dumGeo,_dumMat);
-    mesh.scale.set(r,h,r);
+    if(!_limbGeo)_limbGeo=new THREE.CylinderGeometry(1,1,1,8);
+    if(!_headGeo)_headGeo=new THREE.SphereGeometry(1,8,6);
+
+    const group=new THREE.Group();
+    const legR=r*0.22, legH=h*0.38, legOff=r*0.30;
+    for(const sx of [-1,1]){
+        const leg=new THREE.Mesh(_limbGeo,_bodyMat);
+        leg.scale.set(legR,legH,legR);
+        leg.position.set(sx*legOff,-h/2+legH/2,0);
+        group.add(leg);
+    }
+    const torsoR=r*0.5, torsoH=h*0.36;
+    const torso=new THREE.Mesh(_limbGeo,_bodyMat);
+    torso.scale.set(torsoR,torsoH,torsoR);
+    torso.position.set(0,-h/2+legH+torsoH/2,0);
+    group.add(torso);
+    const armR=r*0.17, armH=h*0.32, armY=-h/2+legH+torsoH*0.7;
+    for(const sx of [-1,1]){
+        const arm=new THREE.Mesh(_limbGeo,_bodyMat);
+        arm.scale.set(armR,armH,armR);
+        arm.position.set(sx*(torsoR+armR*1.1),armY,0);
+        arm.rotation.z=sx*0.18;
+        group.add(arm);
+    }
+    const headR=r*0.36, headY=-h/2+legH+torsoH+headR*0.85;
+    const head=new THREE.Mesh(_headGeo,_headMat);
+    head.scale.set(headR,headR,headR);
+    head.position.set(0,headY,0);
+    group.add(head);
+
     let px,pz,base=null;
     // ~70% perched on trees, rest on the forest floor
     if(Math.random()<0.7){
@@ -1082,22 +1294,39 @@ function spawnOne(){
         if(Math.hypot(px,pz)<400)px+=600;
         base=floorY(px,pz);
     }
-    mesh.position.set(px,base+h/2,pz);
-    scene.add(mesh);
-    dummies.push({mesh,pos:mesh.position.clone(),vel:new THREE.Vector3(),half:h/2,r,state:'IDLE',timer:0});
+    group.position.set(px,base+h/2,pz);
+    scene.add(group);
+    dummies.push({mesh:group,pos:group.position.clone(),vel:new THREE.Vector3(),half:h/2,h,r,state:'IDLE',timer:0,
+        avx:0,avy:0,avz:0,squashT:0,squashAmt:0});
 }
 function spawnDummies(){ for(let i=0;i<C.dummyCount;i++)spawnOne(); }
 function respawnDummies(){
     for(const d of dummies)scene.remove(d.mesh);
     dummies.length=0;
-    spawnDummies();
+    if(GAME_MODE==='combat')spawnDummies();
 }
 
+function killPuff(){
+    camera.getWorldDirection(_bv);        // borrow scratch for direction
+    for(let i=0;i<36&&particles.length<M.smokeMax;i++){
+        _bp.copy(camera.position).addScaledVector(_bv,M.faceRadius*(1.1+Math.random()*1.5));
+        _bp.x+=(Math.random()-0.5)*26;_bp.y+=(Math.random()-0.5)*18;_bp.z+=(Math.random()-0.5)*26;
+        _imp.copy(player.vel).multiplyScalar(0.35);
+        _imp.addScaledVector(_bv,-(28+Math.random()*44)); // wash back over the lens
+        emit(_bp,_imp,1,true);
+    }
+}
 function ragdollDummy(d,ix,iy,iz){
     if(d.state!=='IDLE')return;
     d.state='RAGDOLL';
     d.vel.set(ix,iy,iz);
+    const spd=Math.hypot(ix,iy,iz), spinMag=C.ragdollSpin*(0.5+Math.min(1,spd/500));
+    d.avx=(Math.random()-0.5)*2*spinMag;
+    d.avy=(Math.random()-0.5)*2*spinMag*0.6;
+    d.avz=(Math.random()-0.5)*2*spinMag;
+    d.squashT=0; d.squashAmt=0;
     emitBlood(d.pos,d.vel);
+    killPuff();
     killCount++; EL_KILLS.textContent=killCount;
 }
 
@@ -1106,13 +1335,10 @@ function updateDummies(dt){
     for(let i=dummies.length-1;i>=0;i--){
         const d=dummies[i];
         if(d.state==='IDLE'){
-            const pk=C.proxKill+d.r;   // fly-through kill (needs real speed)
-            if(player.pos.distanceToSquared(d.pos)<pk*pk&&player.vel.lengthSq()>3600)
-                ragdollDummy(d,player.vel.x*0.8,player.vel.y*0.8+60,player.vel.z*0.8);
             continue;
         }
         if(d.state==='RAGDOLL'){
-            d.vel.y+=M.gravity*dt;
+            d.vel.y+=M.gravity*C.ragdollGravMult*dt;
             const dr=Math.exp(-C.ragdollDrag*dt);
             d.vel.x*=dr;d.vel.z*=dr;
             d.pos.addScaledVector(d.vel,dt);
@@ -1124,17 +1350,36 @@ function updateDummies(dt){
                 if(top>floor&&d.pos.y>st.topY-10)floor=top;
             }
             if(d.pos.y<=floor){
+                const impactSpd=Math.abs(d.vel.y);
                 d.pos.y=floor;
-                d.vel.y=-d.vel.y*0.15;
-                d.vel.x*=0.55;d.vel.z*=0.55;
+                d.vel.y=-d.vel.y*C.ragdollBounce;
+                d.vel.x*=0.5;d.vel.z*=0.5;
                 if(Math.abs(d.vel.y)<8)d.vel.y=0;
+                if(impactSpd>15){
+                    d.squashT=0.18; d.squashAmt=Math.min(1,impactSpd/450);
+                    d.avx*=0.35; d.avy*=0.35; d.avz*=0.35;   // a real body loses most of its spin on a thud
+                }
             }
             d.mesh.position.copy(d.pos);
-            d.mesh.rotation.z= d.vel.x*0.004;
-            d.mesh.rotation.x=-d.vel.z*0.004;
+            // proper accumulated tumble (a limp weighted body flops, it doesn't just lean)
+            d.mesh.rotation.x+=d.avx*dt;
+            d.mesh.rotation.y+=d.avy*dt;
+            d.mesh.rotation.z+=d.avz*dt;
+            const spinDamp=Math.exp(-1.1*dt);
+            d.avx*=spinDamp; d.avy*=spinDamp; d.avz*=spinDamp;
+            // squash on impact, settle back to full shape
+            if(d.squashT>0){
+                d.squashT=Math.max(0,d.squashT-dt);
+                const s=d.squashT/0.18, amt=d.squashAmt*s*C.ragdollSquash;
+                d.mesh.scale.set(1+amt*0.7, 1-amt*0.5, 1+amt*0.7);
+            }
             if(Math.random()<0.3&&particles.length<M.smokeMax)
                 emit(d.pos,_bv.set((Math.random()-0.5)*8,10,(Math.random()-0.5)*8),1,true);
-            if(d.vel.lengthSq()<C.settleSpeed*C.settleSpeed){d.state='SETTLED';d.timer=0;}
+            if(d.vel.lengthSq()<C.settleSpeed*C.settleSpeed){
+                d.state='SETTLED';d.timer=0;
+                d.avx=0;d.avy=0;d.avz=0;d.squashT=0;
+                d.mesh.scale.set(1,1,1);
+            }
             continue;
         }
         if(d.state==='SETTLED'){
@@ -1144,6 +1389,169 @@ function updateDummies(dt){
                 scene.remove(d.mesh);
                 dummies.splice(i,1);
                 spawnOne();          // fresh meat elsewhere — population holds
+            }
+        }
+    }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║ [TITAN] big slow walker · targetable detachable parts     ║
+// ║ arms take T.armHP hits, legs slow it when severed,        ║
+// ║ nape (back of neck) is the kill — only from BEHIND.       ║
+// ║ Severed parts become spinning debris with joint blood.    ║
+// ╚══════════════════════════════════════════════════════════╝
+const T={
+    count:4, scale:1.0, walkSpeed:60, wanderR:2600,
+    armHP:2, legHP:2, napeBehind:0.25, guardDist:700,
+    debrisLife:7, swingAmp:0.55,
+};
+const titans=[], debris=[];
+const _skinMat=new THREE.MeshLambertMaterial({color:0xC29A7A});
+const _napeMat=new THREE.MeshLambertMaterial({color:0x7A1010});
+let _boxGeo=null;
+const _pw=new THREE.Vector3(), _tf=new THREE.Vector3(), _tp=new THREE.Vector3();
+
+function _part(g,name,x,y,z,w,h,d,mat,hp){
+    if(!_boxGeo)_boxGeo=new THREE.BoxGeometry(1,1,1);
+    const m=new THREE.Mesh(_boxGeo,mat||_skinMat);
+    m.position.set(x,y,z); m.scale.set(w,h,d);
+    g.add(m);
+    return {mesh:m,name,hp,r:Math.max(w,h,d)*0.5,lx:x,ly:y,lz:z};
+}
+function spawnTitan(){
+    const g=new THREE.Group(), sc=T.scale;
+    // proportions (local units, +Z = forward)
+    const parts=[];
+    parts.push(_part(g,'legL', -30,  75, 0, 44,150,44, null, T.legHP));
+    parts.push(_part(g,'legR',  30,  75, 0, 44,150,44, null, T.legHP));
+    parts.push(_part(g,'torso',  0, 230, 0, 112,160,62, null, 9999));
+    parts.push(_part(g,'armL', -75, 240, 0, 32,132,32, null, T.armHP));
+    parts.push(_part(g,'armR',  75, 240, 0, 32,132,32, null, T.armHP));
+    parts.push(_part(g,'head',   0, 345, 0, 56,58,56, null, 1));
+    parts.push(_part(g,'nape',   0, 322, -40, 30,36,14, _napeMat, 1));
+    g.scale.set(sc,sc,sc);
+    let px=(Math.random()-0.5)*WORLD.size*0.8, pz=(Math.random()-0.5)*WORLD.size*0.8;
+    if(Math.hypot(px,pz)<900){px+=1200;pz+=1200;}
+    g.position.set(px,floorY(px,pz),pz);
+    scene.add(g);
+    titans.push({g,parts,yaw:Math.random()*Math.PI*2,legsLost:0,
+        wp:{x:px,z:pz},wpT:0,anim:Math.random()*10,guard:0});
+}
+function spawnTitans(){ for(let i=0;i<T.count;i++)spawnTitan(); }
+function respawnTitans(){
+    for(const t of titans)scene.remove(t.g);
+    titans.length=0;
+    if(GAME_MODE==='combat')spawnTitans();
+}
+function partWorld(t,p,out){
+    const c=Math.cos(t.g.rotation.y), s=Math.sin(t.g.rotation.y), sc=T.scale;
+    out.set(t.g.position.x+(p.lx*c+p.lz*s)*sc,
+            t.g.position.y+p.ly*sc,
+            t.g.position.z+(-p.lx*s+p.lz*c)*sc);
+    return out;
+}
+function detachPart(t,p,iv){
+    t.g.remove(p.mesh);
+    partWorld(t,p,_pw);
+    p.mesh.position.copy(_pw);
+    p.mesh.rotation.y=t.g.rotation.y;
+    p.mesh.scale.multiplyScalar(T.scale);
+    p.mesh.material=p.mesh.material.clone();
+    p.mesh.material.transparent=true;
+    scene.add(p.mesh);
+    debris.push({mesh:p.mesh,pos:_pw.clone(),vel:iv.clone(),
+        sx:(Math.random()-0.5)*C.ragdollSpin,sy:(Math.random()-0.5)*C.ragdollSpin*0.6,sz:(Math.random()-0.5)*C.ragdollSpin,
+        half:p.r*T.scale,timer:0,settled:false});
+    emitBlood(_pw,iv);
+    p.hp=-1; // gone
+    if(p.name==='legL'||p.name==='legR'){t.legsLost++;}
+}
+function killTitan(t,ti){
+    // burst every remaining part outward
+    for(const p of t.parts){
+        if(p.hp<0)continue;
+        partWorld(t,p,_pw);
+        _imp.set((Math.random()-0.5)*180,70+Math.random()*80,(Math.random()-0.5)*180);
+        _imp.addScaledVector(player.vel,0.4);
+        detachPart(t,p,_imp);
+    }
+    scene.remove(t.g);
+    titans.splice(ti,1);
+    killPuff();
+    killCount++; EL_KILLS.textContent=killCount;
+    spawnTitan();  // population holds
+}
+function updateTitans(dt){
+    for(let ti=titans.length-1;ti>=0;ti--){
+        const t=titans[ti];
+        // waypoint wander
+        t.wpT-=dt;
+        const dx=t.wp.x-t.g.position.x, dz=t.wp.z-t.g.position.z;
+        if(t.wpT<=0||dx*dx+dz*dz<160*160){
+            t.wp.x=t.g.position.x+(Math.random()-0.5)*T.wanderR*2;
+            t.wp.z=t.g.position.z+(Math.random()-0.5)*T.wanderR*2;
+            t.wp.x=THREE.MathUtils.clamp(t.wp.x,-WORLD.half*0.9,WORLD.half*0.9);
+            t.wp.z=THREE.MathUtils.clamp(t.wp.z,-WORLD.half*0.9,WORLD.half*0.9);
+            t.wpT=8+Math.random()*10;
+        }
+        const wantYaw=Math.atan2(dx,dz);
+        let dy=wantYaw-t.yaw;
+        while(dy>Math.PI)dy-=Math.PI*2; while(dy<-Math.PI)dy+=Math.PI*2;
+        t.yaw+=dy*Math.min(1,dt*1.5);
+        t.g.rotation.y=t.yaw;
+        // speed: severed legs cripple it
+        const spdMul=t.legsLost>=2?0.22:(t.legsLost===1?0.55:1);
+        const spd=T.walkSpeed*spdMul;
+        t.g.position.x+=Math.sin(t.yaw)*spd*dt;
+        t.g.position.z+=Math.cos(t.yaw)*spd*dt;
+        t.g.position.y=floorY(t.g.position.x,t.g.position.z);
+        // limb swing
+        t.anim+=dt*spd*0.045;
+        const sw=Math.sin(t.anim)*T.swingAmp;
+        for(const p of t.parts){
+            if(p.hp<0)continue;
+            if(p.name==='legL')p.mesh.rotation.x= sw;
+            if(p.name==='legR')p.mesh.rotation.x=-sw;
+            if(p.name==='armL')p.mesh.rotation.x=-sw*0.7;
+            if(p.name==='armR')p.mesh.rotation.x= sw*0.7;
+        }
+        // guard: raise arms when the player is close and in front
+        _tp.subVectors(player.pos,t.g.position);
+        const near=_tp.lengthSq()<T.guardDist*T.guardDist;
+        _tf.set(Math.sin(t.yaw),0,Math.cos(t.yaw));
+        _tp.y=0; _tp.normalize();
+        const inFront=_tf.dot(_tp)>0.2;
+        t.guard+=((near&&inFront)?1:0-t.guard)*Math.min(1,dt*5);
+        if(t.guard>0.02)for(const p of t.parts){
+            if(p.hp<0)continue;
+            if(p.name==='armL'||p.name==='armR')
+                p.mesh.rotation.x=THREE.MathUtils.lerp(p.mesh.rotation.x,-2.3,t.guard);
+        }
+    }
+}
+function updateDebris(dt){
+    for(let i=debris.length-1;i>=0;i--){
+        const d=debris[i];
+        d.vel.y+=M.gravity*C.ragdollGravMult*dt;
+        d.vel.x*=Math.exp(-1.2*dt); d.vel.z*=Math.exp(-1.2*dt);
+        d.pos.addScaledVector(d.vel,dt);
+        const fl=floorY(d.pos.x,d.pos.z)+d.half;
+        if(d.pos.y<=fl){
+            d.pos.y=fl;
+            d.vel.y=-d.vel.y*C.ragdollBounce;
+            d.vel.x*=0.5; d.vel.z*=0.5;
+            d.sx*=0.35; d.sy*=0.35; d.sz*=0.35;
+            if(Math.abs(d.vel.y)<10){d.vel.y=0;d.settled=true;}
+        }
+        d.mesh.position.copy(d.pos);
+        d.mesh.rotation.x+=d.sx*dt; d.mesh.rotation.y+=d.sy*dt; d.mesh.rotation.z+=d.sz*dt;
+        if(d.settled){
+            d.timer+=dt;
+            d.mesh.material.opacity=Math.max(0,1-d.timer/T.debrisLife);
+            if(d.timer>=T.debrisLife){
+                scene.remove(d.mesh);
+                d.mesh.material.dispose();
+                debris.splice(i,1);
             }
         }
     }
@@ -1162,18 +1570,57 @@ function trySlash(hist){
     if(n<3)return;
     const dx=hist[n-1].x-hist[0].x, dy=hist[n-1].y-hist[0].y;
     if(Math.sqrt(dx*dx+dy*dy)<C.swipePx)return;
+    if(GAME_MODE!=='combat')return;
     slashCD=C.bladeCooldown;
     camera.getWorldDirection(_fwd);
     for(const d of dummies){
         if(d.state!=='IDLE')continue;
-        _toD.subVectors(d.pos,player.pos);
+        // capsule reach: measure to the closest point on the body's core
+        // segment, not the center — head/feet are reachable, thin air isn't
+        const seg=Math.max(0,d.half-d.r);
+        const cy=THREE.MathUtils.clamp(player.pos.y,d.pos.y-seg,d.pos.y+seg);
+        _toD.set(d.pos.x,cy,d.pos.z).sub(player.pos);
         const reach=C.bladeRadius+d.r;
         if(_toD.lengthSq()>reach*reach)continue;
         _toD.normalize();
         if(_fwd.dot(_toD)<C.facingDot)continue;
         _imp.copy(player.vel).multiplyScalar(1.2);
-        _imp.y+=80; _imp.addScaledVector(_toD,140);
+        _imp.y+=40; _imp.addScaledVector(_toD,140);
         ragdollDummy(d,_imp.x,_imp.y,_imp.z);
+    }
+    // titan parts — the slash lands on the part CLOSEST TO THE CROSSHAIR,
+    // so aiming matters. Arms soak hits; nape kills only from behind.
+    for(let ti=titans.length-1;ti>=0;ti--){
+        const t=titans[ti];
+        let best=null,bestDot=C.facingDot;
+        for(const p of t.parts){
+            if(p.hp<0||p.name==='torso')continue;
+            partWorld(t,p,_pw);
+            _toD.subVectors(_pw,player.pos);
+            const reach=C.bladeRadius+p.r*T.scale;
+            if(_toD.lengthSq()>reach*reach)continue;
+            _toD.normalize();
+            const d=_fwd.dot(_toD);
+            if(d>bestDot){bestDot=d;best=p;}
+        }
+        if(!best)continue;
+        partWorld(t,best,_pw);
+        _toD.subVectors(_pw,player.pos).normalize();
+        if(best.name==='nape'){
+            // must strike from BEHIND the titan
+            _tf.set(Math.sin(t.yaw),0,Math.cos(t.yaw));
+            _tp.subVectors(player.pos,t.g.position); _tp.y=0; _tp.normalize();
+            if(_tf.dot(_tp)>-T.napeBehind){ emitBlood(_pw,_toD); killPuff(); continue; } // deflected
+            killTitan(t,ti); continue;
+        }
+        best.hp--;
+        emitBlood(_pw,player.vel);
+        killPuff();
+        if(best.hp<=0){
+            _imp.copy(player.vel).multiplyScalar(0.9);
+            _imp.y+=55; _imp.addScaledVector(_toD,160);
+            detachPart(t,best,_imp);
+        }
     }
 }
 
@@ -1233,6 +1680,26 @@ function physics(dt){
     const _boost=player.boostIntensity>0.05;
     if(_boost!==_lastBoost){ EL.knobLEl.classList.toggle('boost',_boost); _lastBoost=_boost; }
 
+    if(grapple.active&&grapple.tD){
+        if(dummies.indexOf(grapple.tD)<0){
+            releaseGrapple();
+        } else {
+            grapple.anchor.set(grapple.tD.pos.x+grapple.ox,
+                               grapple.tD.pos.y+grapple.oy,
+                               grapple.tD.pos.z+grapple.oz);
+        }
+    }
+    if(grapple.active&&grapple.tP){
+        if(grapple.tP.hp<0||titans.indexOf(grapple.tT)<0){
+            releaseGrapple();
+        } else {
+            partWorld(grapple.tT,grapple.tP,_pw);
+            const c=Math.cos(grapple.tT.yaw),sn=Math.sin(grapple.tT.yaw);
+            grapple.anchor.set(_pw.x+grapple.ox*c+grapple.oz*sn,
+                               _pw.y+grapple.oy,
+                               _pw.z-grapple.ox*sn+grapple.oz*c);
+        }
+    }
     if(grapple.active){
         _toA.subVectors(grapple.anchor,player.pos);
         const dist=_toA.length();_toA.normalize();
@@ -1273,6 +1740,54 @@ function physics(dt){
             player.pos.z+=dz<0?-oz:oz;
             if(vImpact>M.tumbleThresh){startTumble(vImpact,new THREE.Vector3(0,0,Math.sign(dz)));player.vel.z=-player.vel.z*0.3;}
             else player.vel.z=0;
+        }
+    }
+
+    // player vs bodies — DELIBERATE now, not an accident. Cylinder push-out
+    // against standing dummies + titan torsos. bodySolid 0 = ghost through
+    // (old behavior), 1 = fully solid. Fly into a dummy above bumpKO speed
+    // and the body-check ragdolls it.
+    if(C.bodySolid>0.01){
+        for(const dm of dummies){
+            if(dm.state!=='IDLE')continue;
+            if(player.pos.y+M.height<dm.pos.y-dm.half||player.pos.y-M.height>dm.pos.y+dm.half)continue;
+            const dx=player.pos.x-dm.pos.x,dz=player.pos.z-dm.pos.z;
+            const rr=dm.r+M.radius, d2=dx*dx+dz*dz;
+            if(d2>=rr*rr)continue;
+            const dist=Math.max(Math.sqrt(d2),1e-3),nx=dx/dist,nz=dz/dist;
+            const push=(rr-dist)*C.bodySolid;
+            player.pos.x+=nx*push; player.pos.z+=nz*push;
+            const vn=player.vel.x*nx+player.vel.z*nz;
+            if(vn<0){
+                const vImpact=-vn;
+                if(vImpact>C.bumpKO){
+                    ragdollDummy(dm,-nx*vImpact*0.7,vImpact*0.35,-nz*vImpact*0.7);
+                    player.vel.x-=vn*nx*0.45; player.vel.z-=vn*nz*0.45;  // punch through, lose some speed
+                }else{
+                    player.vel.x-=vn*nx*C.bodySolid; player.vel.z-=vn*nz*C.bodySolid;
+                    if(vImpact>M.tumbleThresh)startTumble(vImpact,_bv.set(nx,0,nz));
+                }
+            }
+        }
+        for(const t of titans){
+            for(const p of t.parts){
+                if(p.hp<0||(p.name!=='torso'&&p.name!=='head'))continue;
+                partWorld(t,p,_pw);
+                const pr=p.r*T.scale+M.radius;
+                if(Math.abs(player.pos.y-_pw.y)>pr+M.height)continue;
+                const dx=player.pos.x-_pw.x,dz=player.pos.z-_pw.z;
+                const d2=dx*dx+dz*dz;
+                if(d2>=pr*pr)continue;
+                const dist=Math.max(Math.sqrt(d2),1e-3),nx=dx/dist,nz=dz/dist;
+                const push=(pr-dist)*C.bodySolid;
+                player.pos.x+=nx*push; player.pos.z+=nz*push;
+                const vn=player.vel.x*nx+player.vel.z*nz;
+                if(vn<0){
+                    const vImpact=-vn;
+                    player.vel.x-=vn*nx*C.bodySolid; player.vel.z-=vn*nz*C.bodySolid;
+                    if(vImpact>M.tumbleThresh)startTumble(vImpact,_bv.set(nx,0,nz));
+                }
+            }
         }
     }
 
@@ -1471,13 +1986,15 @@ function updateReplay(dt){
 // ╔══════════════════════════════════════════════════════════╗
 // ║ [ODM] INPUT — dual sticks live · orbit in replay          ║
 // ╚══════════════════════════════════════════════════════════╝
-function normStick(rawDx,rawDy){
+function normStick(rawDx,rawDy,curve=1){
     const R=M.stickRadius;
     const dist=Math.sqrt(rawDx*rawDx+rawDy*rawDy);
     if(dist===0)return{dx:0,dy:0,vx:0,vy:0,mag:0};
     const cap=Math.min(dist,R);
+    const linMag=cap/R;                                // true thumb travel, 0-1 — drives the knob visual
+    const curvedMag=curve===1?linMag:Math.pow(linMag,curve); // curve<1: touchy near center. curve>1: dead-feeling near center, snappy at the edge
     const nx=rawDx/dist,ny=rawDy/dist;
-    return{dx:nx*(cap/R),dy:ny*(cap/R),vx:nx,vy:ny,mag:cap/R};
+    return{dx:nx*curvedMag,dy:ny*curvedMag,vx:nx,vy:ny,mag:linMag};
 }
 function joyBounds(el){const r=el.getBoundingClientRect();return{cx:r.left+r.width/2,cy:r.top+r.height/2,r:r.width/2+24};}
 
@@ -1485,7 +2002,7 @@ const joyL=document.getElementById('joyL'),joyR=document.getElementById('joyR');
 const knobL=document.getElementById('knobL'),knobR=document.getElementById('knobR');
 
 document.addEventListener('touchstart',e=>{
-    if(e.target.closest('#ui-deck')||e.target.closest('#replay-bar'))return;
+    if(e.target.closest('#ui-deck')||e.target.closest('#replay-bar')||e.target.closest('#deck-pull'))return;
     e.preventDefault();
     if(MODE==='replay'){
         for(const t of e.changedTouches)orbit.touches[t.identifier]={x:t.clientX,y:t.clientY};
@@ -1516,7 +2033,7 @@ document.addEventListener('touchstart',e=>{
 },{passive:false});
 
 document.addEventListener('touchmove',e=>{
-    if(e.target.closest('#ui-deck')||e.target.closest('#replay-bar'))return;
+    if(e.target.closest('#ui-deck')||e.target.closest('#replay-bar')||e.target.closest('#deck-pull'))return;
     e.preventDefault();
     if(MODE==='replay'){
         const ids=Object.keys(orbit.touches);
@@ -1541,12 +2058,12 @@ document.addEventListener('touchmove',e=>{
     const KT=M.stickRadius*0.6;
     for(const t of e.changedTouches){
         if(t.identifier===stickL.id){
-            const n=normStick(t.clientX-stickL.cx,t.clientY-stickL.cy);
+            const n=normStick(t.clientX-stickL.cx,t.clientY-stickL.cy,M.moveCurve);
             stickL.dx=n.dx;stickL.dy=n.dy;
             knobL.style.transform=`translate(calc(-50% + ${n.vx*n.mag*KT}px), calc(-50% + ${n.vy*n.mag*KT}px))`;
         }
         if(t.identifier===stickR.id){
-            const n=normStick(t.clientX-stickR.cx,t.clientY-stickR.cy);
+            const n=normStick(t.clientX-stickR.cx,t.clientY-stickR.cy,M.lookCurve);
             stickR.dx=n.dx;stickR.dy=n.dy;
             knobR.style.transform=`translate(calc(-50% + ${n.vx*n.mag*KT}px), calc(-50% + ${n.vy*n.mag*KT}px))`;
         }
@@ -1591,7 +2108,7 @@ function showToast(msg){
 }
 document.getElementById('btn-watch').addEventListener('click',e=>{e.stopPropagation();if(MODE==='live')enterReplay();});
 document.getElementById('btn-exit-replay').addEventListener('click',()=>{if(MODE==='replay')exitReplay();});
-document.getElementById('btn-dummies').addEventListener('click',e=>{e.stopPropagation();respawnDummies();showToast('. . . f r e s h &nbsp; m e a t . . .');});
+document.getElementById('btn-dummies').addEventListener('click',e=>{e.stopPropagation();respawnDummies();respawnTitans();showToast('. . . f r e s h &nbsp; m e a t . . .');});
 document.getElementById('btn-reset').addEventListener('click',()=>{
     if(MODE==='replay')exitReplay();
     player.pos.set(0,20,2600);player.vel.set(0,0,0);
@@ -1602,17 +2119,21 @@ document.getElementById('btn-reset').addEventListener('click',()=>{
 });
 document.getElementById('deck-tab').addEventListener('click',e=>{
     if(e.target.closest('.icon-btn'))return;
-    const deck=document.getElementById('ui-deck');
-    deck.classList.toggle('collapsed');
-    deck.classList.toggle('peek',!deck.classList.contains('collapsed'));
-    setTimeout(()=>window.dispatchEvent(new Event('resize')),200);
+    document.getElementById('ui-deck').classList.remove('open');
+    setTimeout(()=>window.dispatchEvent(new Event('resize')),260);
 });
-window.addEventListener('resize',()=>{
+document.getElementById('deck-pull').addEventListener('click',()=>{
+    document.getElementById('ui-deck').classList.add('open');
+    setTimeout(()=>window.dispatchEvent(new Event('resize')),260);
+});
+function _refit(){
     renderer.setSize(cc.clientWidth,cc.clientHeight);
     if(MODE==='live')setHFov(currentHFov);
     else{camera.aspect=cc.clientWidth/Math.max(1,cc.clientHeight);camera.updateProjectionMatrix();}
     sizeSlashCanvas();
-});
+}
+window.addEventListener('resize',_refit);
+window.addEventListener('orientationchange',()=>{_refit();setTimeout(_refit,300);});
 
 // ╔══════════════════════════════════════════════════════════╗
 // ║ [CORE] loop + boot                                        ║
@@ -1634,16 +2155,96 @@ buildSliderColumn('cam-sliders',CAM_SLIDERS);
 buildSliderColumn('combat-sliders',COMBAT_SLIDERS);
 buildSliderColumn('atmo-sliders',ATMO_SLIDERS);
 buildSliderColumn('world-sliders',WORLD_SLIDERS);
-document.getElementById('btn-regen').addEventListener('click', e=>{ e.stopPropagation(); regenForest(); respawnDummies(); });
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║ [PRESET] portable tuning files — the multi-project bridge ║
+// ║ save → one JSON holding every namespace: M (feel), ATMO   ║
+// ║ (look), WG (worldgen), C (combat), map size, terrain mult.║
+// ║ load → applies ONLY the namespaces present in the file,   ║
+// ║ so a hand-trimmed {"M":{...}} is a pure feel-preset and   ║
+// ║ {"ATMO":{...},"WG":{...}} is a pure look-preset.          ║
+// ║ Any build that carries this block speaks the same format. ║
+// ╚══════════════════════════════════════════════════════════╝
+const PRESET_NS={M,ATMO,WG,C,T,JOY};
+const SLIDER_COLS=[
+    ['move-sliders',MOVE_SLIDERS],['cam-sliders',CAM_SLIDERS],
+    ['combat-sliders',COMBAT_SLIDERS],['atmo-sliders',ATMO_SLIDERS],
+    ['world-sliders',WORLD_SLIDERS],
+];
+function refreshSliders(){
+    for(const [id,defs] of SLIDER_COLS){
+        document.getElementById(id).innerHTML='';
+        buildSliderColumn(id,defs);
+    }
+}
+function savePreset(){
+    const out={format:'odm-project',version:1,gameMode:GAME_MODE,saved:new Date().toISOString(),
+               worldSize:WORLD.size,terrainMult:TER.mult};
+    for(const ns in PRESET_NS)out[ns]=Object.assign({},PRESET_NS[ns]);
+    const blob=new Blob([JSON.stringify(out,null,1)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='odm_project_'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    showToast('. . . p r o j e c t   s a v e d . . .');
+}
+function applyPreset(p){
+    if(!p){showToast('. . . not a project . . .');return;}
+    if(p.gameMode&&p.gameMode in GAMEMODES&&p.gameMode!==GAME_MODE)setGameMode(p.gameMode);
+    // merge only known keys of namespaces the file actually carries
+    for(const ns in PRESET_NS){
+        if(!p[ns])continue;
+        const target=PRESET_NS[ns];
+        for(const k in p[ns])if(k in target&&typeof p[ns][k]===typeof target[k])target[k]=p[ns][k];
+    }
+    // re-apply everything visual/derived
+    if(p.ATMO){applySky();applySun();forestTintDirty=true;
+        ground.material.color.copy(GROUND_BASE).multiplyScalar(ATMO.groundBright);}
+    if(p.M){if(pMat)pMat.size=M.smokeSize;currentHFov=M.hFov;setHFov(currentHFov);}
+    if(p.JOY)setJoyLayout();
+    if(typeof p.terrainMult==='number'){TER.mult=p.terrainMult;if(TER.active)setTerrainMult(p.terrainMult);}
+    refreshSliders();
+    showToast('. . . p r o j e c t   l o a d e d . . .');
+}
+document.getElementById('btn-save').addEventListener('click',e=>{e.stopPropagation();savePreset();});
+document.getElementById('btn-load').addEventListener('click',e=>{e.stopPropagation();document.getElementById('preset-file').click();});
+document.getElementById('preset-file').addEventListener('change',e=>{
+    if(!e.target.files.length)return;
+    const rd=new FileReader();
+    rd.onload=ev=>{try{applyPreset(JSON.parse(ev.target.result));}catch(err){showToast('. . . p a r s e   f a i l e d . . .');}};
+    rd.readAsText(e.target.files[0]);
+    e.target.value='';
+});
+document.getElementById('btn-regen').addEventListener('click', e=>{ e.stopPropagation(); regenForest(); respawnDummies(); respawnTitans(); });
 document.getElementById('btn-terrain').addEventListener('click', e=>{ e.stopPropagation(); document.getElementById('terrain-file').click(); });
 document.getElementById('terrain-file').addEventListener('change', e=>{ if(e.target.files.length) loadTerrainFile(e.target.files[0]); e.target.value=''; });
 initSmoke();
-spawnDummies();
+setJoyLayout();
+if(GAME_MODE==='combat'){spawnDummies();spawnTitans();}
 sizeSlashCanvas();
 applySky();applySun();
 renderer.setSize(cc.clientWidth||innerWidth,cc.clientHeight||innerHeight);
 camTarget.copy(player.pos).add(new THREE.Vector3(0,M.eyeOffset,0));
 setHFov(M.hFov);
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║ [GAMEMODE] pluggable — combat (default) | sandbox | explorer ║
+// ╚══════════════════════════════════════════════════════════╝
+function setGameMode(m){
+    if(!(m in GAMEMODES))return;
+    GAME_MODE=m; killCount=0; EL_KILLS.textContent=0;
+    respawnDummies(); respawnTitans();          // mode-aware: spawn in combat, clear otherwise
+    for(const d of debris)scene.remove(d.mesh);
+    debris.length=0;
+    document.getElementById('h-title').textContent=GAMEMODES[m].hud;
+    document.getElementById('h-killwrap').style.display=(m==='combat')?'':'none';
+    showToast('mode · '+GAMEMODES[m].name);
+}
+document.getElementById('btn-mode').addEventListener('click',e=>{
+    e.stopPropagation();
+    setGameMode(MODE_ORDER[(MODE_ORDER.indexOf(GAME_MODE)+1)%MODE_ORDER.length]);
+});
 
 const clock=new THREE.Clock();
 let clockSwallow=false;
@@ -1655,7 +2256,8 @@ function animate(){
     if(MODE==='live'){
         simTime+=dt;
         physics(dt);
-        updateDummies(dt);
+        if(GAME_MODE==='combat'){updateDummies(dt);updateTitans(dt);}
+        updateDebris(dt);
         updateSmoke(dt);
         drawSlash();
         recordFrame();
